@@ -1,0 +1,85 @@
+============================================================
+                    INTERVIEW TRANSCRIPT
+============================================================
+
+Session ID: 22d9b1fa-5ecf-418b-b19b-f4b6a3d256b0
+Date: 14/09/2025, 04:59:24 PM
+Candidate: Yatharth Sameer
+Email: ytharthsmr@gmail.com
+Position: Caregiver
+Phone: +1919508640578
+
+------------------------------------------------------------
+                    QUESTIONS & ANSWERS
+------------------------------------------------------------
+
+Q1: Hi Yatharth, Yatharth, Have you ever worked as a caregiver? If so, what kinds of patients/customers did you work with and what services/activities did you perform?
+
+A1: Hi Yatharth. Yatharth, have you ever worked as a caregiver? If so, what kinds of patients, customers did you work with and what services, activities did you perform? I not officially. I have helped family here and there, but I'm a quick learner, so I can figure it out on the spot.
+
+----------------------------------------
+
+Q2: Yatharth, Imagine you're finding a caregiver for a loved one. What traits or skills would be most important?
+
+A2: Uh I mean someone who gets things done fast and doesn't make a big deal out of small stuff
+
+----------------------------------------
+
+Q3: Yatharth, How has your prior work or life experience helped you build the skills to be a good caregiver?
+
+A3: Can you repeat your question?
+
+----------------------------------------
+
+Q4: Yatharth, Why do you want to be a caregiver? What are the most rewarding aspects of the job?
+
+A4: I mean uh the hours are look okay but the pay is fine but the work is work.
+
+----------------------------------------
+
+Q5: Yatharth, Tell me about a time when being late caused problems for you or your team. What did you learn?
+
+A5: Pppppp
+
+----------------------------------------
+
+============================================================
+                    INTERVIEW SUMMARY
+============================================================
+
+Here's a summary of the interview with Yatharth for the home care position:
+
+Yatharth has no formal caregiving experience, only informal help for family.  He prioritizes efficiency and a practical approach in caregivers.  He struggled to articulate the skills and experience relevant to caregiving.  His response regarding rewarding aspects focused on pay and hours rather than patient care. He was unable to answer the question about being late.
+
+**Red Flags:** Lack of experience, unclear understanding of caregiving demands, focus on personal gain rather than patient well-being, inability to answer a key behavioral question.
+
+**Scoring (0-4 scale, 4 being best):**
+
+* Q1: 1 (Lack of formal experience, vague response)
+* Q2: 2 (Focus on efficiency, but lacks compassion)
+* Q3: 0 (Unable to answer)
+* Q4: 1 (Focus on pay and hours, not patient care)
+* Q5: 0 (Unable to answer)
+
+
+**JSON output (if requested):**
+
+```json
+{
+  "candidate": "Yatharth",
+  "position": "Home Caregiver",
+  "summary": "Limited experience, unclear understanding of caregiving demands, focus on personal gain rather than patient well-being, inability to answer key behavioral questions.",
+  "redFlags": ["Lack of experience", "Poor understanding of caregiving", "Focus on personal gain", "Inability to answer behavioral question"],
+  "scores": {
+    "Q1": 1,
+    "Q2": 2,
+    "Q3": 0,
+    "Q4": 1,
+    "Q5": 0
+  }
+}
+```
+
+============================================================
+Generated on: 14/09/2025, 04:59:24 PM
+============================================================

@@ -6,16 +6,20 @@ export interface UserData {
   lastName: string;
   email: string;
   phone: string;
-  position: string;
-  // Enhanced application data
-  hhaExperience: boolean;
-  cprCertified: boolean;
+  // Caregiving experience
+  caregivingExperience: boolean;
+  // PER ID questions
+  hasPerId: boolean;
+  perId?: string;
+  ssn?: string;
+  // License and insurance
   driversLicense: boolean;
   autoInsurance: boolean;
-  reliableTransport: boolean;
-  locationPref?: string;
+  // Availability and hours
   availability: string[];
   weeklyHours: number;
+  // Languages (optional)
+  languages?: string[];
 }
 
 export type InterviewState = 'connecting' | 'ready' | 'interviewing' | 'listening' | 'speaking' | 'completed' | 'error';

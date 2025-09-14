@@ -14,7 +14,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
@@ -26,20 +25,21 @@ export default function ApplicationForm() {
 
   const form = useForm<ApplicationData>({
     resolver: zodResolver(applicationSchema),
+    mode: "onChange", // Validate on every change
     defaultValues: {
       firstName: state.application?.firstName || "",
       lastName: state.application?.lastName || "",
       email: state.application?.email || "",
       phone: state.application?.phone || "",
-      position: state.application?.position || undefined,
-      hhaExperience: state.application?.hhaExperience || undefined,
-      cprCertified: state.application?.cprCertified || undefined,
+      caregivingExperience: state.application?.caregivingExperience || undefined,
+      hasPerId: state.application?.hasPerId || undefined,
+      perId: state.application?.perId || "",
+      ssn: state.application?.ssn || "",
       driversLicense: state.application?.driversLicense || undefined,
       autoInsurance: state.application?.autoInsurance || undefined,
-      reliableTransport: state.application?.reliableTransport || undefined,
-      locationPref: state.application?.locationPref || "",
       availability: state.application?.availability || [],
       weeklyHours: state.application?.weeklyHours || 30,
+      languages: state.application?.languages || [],
     },
   });
 
@@ -82,7 +82,35 @@ export default function ApplicationForm() {
     }
   };
 
-  const availabilityOptions = ["Mornings", "Afternoons", "Evenings", "Overnights", "Weekends"];
+  const availabilityOptions = ["Morning", "Afternoon", "Evening", "Overnight", "Weekend"];
+  const languageOptions = ["English", "Spanish", "Mandarin", "Others"];
+
+  // Check if all mandatory fields are filled (excluding optional fields like perId and ssn)
+  const isMandatoryFieldsFilled = () => {
+    return (
+      watchedData.firstName &&
+      watchedData.firstName.length >= 2 &&
+      watchedData.lastName &&
+      watchedData.lastName.length >= 2 &&
+      watchedData.email &&
+      watchedData.email.includes('@') &&
+      watchedData.phone &&
+      watchedData.phone.length >= 7 &&
+      watchedData.caregivingExperience !== undefined &&
+      watchedData.hasPerId !== undefined &&
+      watchedData.driversLicense !== undefined &&
+      watchedData.autoInsurance !== undefined &&
+      watchedData.availability &&
+      watchedData.availability.length > 0 &&
+      watchedData.weeklyHours &&
+      watchedData.weeklyHours >= 5
+      // Note: perId and ssn are optional, so we don't check them here
+      // Note: languages are optional, so we don't check them here
+    );
+  };
+
+  // Use Zod validation as primary validation, custom check as backup
+  const isFormValid = isValid || isMandatoryFieldsFilled();
 
   return (
     <motion.div
@@ -97,149 +125,169 @@ export default function ApplicationForm() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Name Fields */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="firstName">First Name *</Label>
-            <Input
-              id="firstName"
-              {...register("firstName")}
-              autoComplete="given-name"
-              className={errors.firstName ? "border-destructive" : ""}
-            />
-            {errors.firstName && (
-              <p className="text-sm text-destructive">{errors.firstName.message}</p>
-            )}
-          </div>
+        {/* Contact Details */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">Contact Details</h2>
           
+          {/* Name Fields */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="firstName">First Name *</Label>
+              <Input
+                id="firstName"
+                {...register("firstName")}
+                autoComplete="given-name"
+                className={errors.firstName ? "border-destructive" : ""}
+              />
+              {errors.firstName && (
+                <p className="text-sm text-destructive">{errors.firstName.message}</p>
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="lastName">Last Name *</Label>
+              <Input
+                id="lastName"
+                {...register("lastName")}
+                autoComplete="family-name"
+                className={errors.lastName ? "border-destructive" : ""}
+              />
+              {errors.lastName && (
+                <p className="text-sm text-destructive">{errors.lastName.message}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Email */}
           <div className="space-y-2">
-            <Label htmlFor="lastName">Last Name *</Label>
+            <Label htmlFor="email">Email *</Label>
             <Input
-              id="lastName"
-              {...register("lastName")}
-              autoComplete="family-name"
-              className={errors.lastName ? "border-destructive" : ""}
+              id="email"
+              type="email"
+              {...register("email")}
+              autoComplete="email"
+              className={errors.email ? "border-destructive" : ""}
             />
-            {errors.lastName && (
-              <p className="text-sm text-destructive">{errors.lastName.message}</p>
+            {errors.email && (
+              <p className="text-sm text-destructive">{errors.email.message}</p>
+            )}
+          </div>
+
+          {/* Phone */}
+          <div className="space-y-2">
+            <Label htmlFor="phone">Phone *</Label>
+            <PhoneInput
+              id="phone"
+              country="US"
+              value={watchedData.phone}
+              onChange={(value) => setValue("phone", value || "")}
+              className={`PhoneInputInput ${errors.phone ? "border-destructive" : ""}`}
+              inputMode="tel"
+              autoComplete="tel"
+            />
+            {errors.phone && (
+              <p className="text-sm text-destructive">{errors.phone.message}</p>
             )}
           </div>
         </div>
 
-        {/* Contact Information */}
-        <div className="space-y-2">
-          <Label htmlFor="email">Email Address *</Label>
-          <Input
-            id="email"
-            type="email"
-            {...register("email")}
-            autoComplete="email"
-            className={errors.email ? "border-destructive" : ""}
-          />
-          {errors.email && (
-            <p className="text-sm text-destructive">{errors.email.message}</p>
-          )}
-          <p className="text-xs text-muted-foreground">We'll use this to send you interview updates</p>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="phone">Cell Phone Number *</Label>
-          <PhoneInput
-            id="phone"
-            country="US"
-            value={watchedData.phone}
-            onChange={(value) => setValue("phone", value || "")}
-            className={`PhoneInputInput ${errors.phone ? "border-destructive" : ""}`}
-            inputMode="tel"
-            autoComplete="tel"
-          />
-          {errors.phone && (
-            <p className="text-sm text-destructive">{errors.phone.message}</p>
-          )}
-          <p className="text-xs text-muted-foreground">For interview scheduling and urgent communications</p>
-        </div>
-
-        {/* Position */}
-        <div className="space-y-3">
-          <Label>Which position are you applying for? *</Label>
-          <RadioGroup
-            value={watchedData.position}
-            onValueChange={(value) => setValue("position", value as ApplicationData["position"])}
-            className="grid grid-cols-1 gap-3"
-          >
-            {["Caregiver", "Registered Nurse", "Therapist"].map((position) => (
-              <div key={position} className="flex items-center space-x-2">
-                <RadioGroupItem value={position} id={position} />
-                <Label htmlFor={position} className="font-normal cursor-pointer">
-                  {position}
-                </Label>
-              </div>
-            ))}
-          </RadioGroup>
-          {errors.position && (
-            <p className="text-sm text-destructive">{errors.position.message}</p>
-          )}
-        </div>
-
-        {/* Experience Questions */}
-        <div className="space-y-6">
+        {/* Caregiving Experience */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">Experience</h2>
+          
           <div className="space-y-3">
-            <Label>Do you have experience working as a home health aide? *</Label>
+            <Label>Do you have caregiving experience (working as a home care professional)? *</Label>
             <RadioGroup
-              value={watchedData.hhaExperience?.toString()}
-              onValueChange={(value) => setValue("hhaExperience", value === "true")}
+              value={watchedData.caregivingExperience?.toString()}
+              onValueChange={(value) => setValue("caregivingExperience", value === "true")}
             >
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="true" id="hha-yes" />
-                <Label htmlFor="hha-yes" className="font-normal cursor-pointer">Yes</Label>
+                <RadioGroupItem value="true" id="caregiving-yes" />
+                <Label htmlFor="caregiving-yes" className="font-normal cursor-pointer">Yes</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="false" id="hha-no" />
-                <Label htmlFor="hha-no" className="font-normal cursor-pointer">No</Label>
+                <RadioGroupItem value="false" id="caregiving-no" />
+                <Label htmlFor="caregiving-no" className="font-normal cursor-pointer">No</Label>
               </div>
             </RadioGroup>
-            {errors.hhaExperience && (
-              <p className="text-sm text-destructive">{errors.hhaExperience.message}</p>
+            {errors.caregivingExperience && (
+              <p className="text-sm text-destructive">{errors.caregivingExperience.message}</p>
             )}
           </div>
+        </div>
 
+        {/* PER ID Section */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">Certification</h2>
+          
           <div className="space-y-3">
-            <Label>Do you have a current CPR/First aid certification? *</Label>
+            <Label>Do you have a PER ID? *</Label>
             <RadioGroup
-              value={watchedData.cprCertified?.toString()}
-              onValueChange={(value) => setValue("cprCertified", value === "true")}
+              value={watchedData.hasPerId?.toString()}
+              onValueChange={(value) => setValue("hasPerId", value === "true")}
             >
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="true" id="cpr-yes" />
-                <Label htmlFor="cpr-yes" className="font-normal cursor-pointer">Yes</Label>
+                <RadioGroupItem value="true" id="per-yes" />
+                <Label htmlFor="per-yes" className="font-normal cursor-pointer">Yes</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="false" id="cpr-no" />
-                <Label htmlFor="cpr-no" className="font-normal cursor-pointer">No</Label>
+                <RadioGroupItem value="false" id="per-no" />
+                <Label htmlFor="per-no" className="font-normal cursor-pointer">No</Label>
               </div>
             </RadioGroup>
-            {errors.cprCertified && (
-              <p className="text-sm text-destructive">{errors.cprCertified.message}</p>
+            {errors.hasPerId && (
+              <p className="text-sm text-destructive">{errors.hasPerId.message}</p>
             )}
           </div>
 
+          {/* PER ID Input - Optional */}
+          <div className="space-y-2">
+            <Label htmlFor="perId">Please share your PER ID (optional)</Label>
+            <Input
+              id="perId"
+              {...register("perId")}
+              placeholder="Enter your PER ID"
+              className={errors.perId ? "border-destructive" : ""}
+            />
+            {errors.perId && (
+              <p className="text-sm text-destructive">{errors.perId.message}</p>
+            )}
+          </div>
+
+          {/* SSN - Optional */}
+          <div className="space-y-2">
+            <Label htmlFor="ssn">Share your SSN (optional)</Label>
+            <Input
+              id="ssn"
+              type="password"
+              {...register("ssn")}
+              placeholder="Enter your SSN"
+              className={errors.ssn ? "border-destructive" : ""}
+            />
+            {errors.ssn && (
+              <p className="text-sm text-destructive">{errors.ssn.message}</p>
+            )}
+            <p className="text-xs text-muted-foreground">This information is kept secure and confidential</p>
+          </div>
+        </div>
+
+        {/* License and Insurance */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">License & Insurance</h2>
+          
           <div className="space-y-3">
-            <Label>Driver's License & ID *</Label>
+            <Label>Do you have a driving license? *</Label>
             <RadioGroup
               value={watchedData.driversLicense?.toString()}
               onValueChange={(value) => setValue("driversLicense", value === "true")}
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="true" id="license-yes" />
-                <Label htmlFor="license-yes" className="font-normal cursor-pointer">
-                  Yes, I have a current and valid driver's license
-                </Label>
+                <Label htmlFor="license-yes" className="font-normal cursor-pointer">Yes</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="false" id="license-no" />
-                <Label htmlFor="license-no" className="font-normal cursor-pointer">
-                  No, I do not have a driver's license at this time
-                </Label>
+                <Label htmlFor="license-no" className="font-normal cursor-pointer">No</Label>
               </div>
             </RadioGroup>
             {errors.driversLicense && (
@@ -248,124 +296,121 @@ export default function ApplicationForm() {
           </div>
 
           <div className="space-y-3">
-            <Label>Auto Insurance *</Label>
+            <Label>Do you have auto insurance? *</Label>
             <RadioGroup
               value={watchedData.autoInsurance?.toString()}
               onValueChange={(value) => setValue("autoInsurance", value === "true")}
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="true" id="insurance-yes" />
-                <Label htmlFor="insurance-yes" className="font-normal cursor-pointer">
-                  Yes, I have auto insurance
-                </Label>
+                <Label htmlFor="insurance-yes" className="font-normal cursor-pointer">Yes</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="false" id="insurance-no" />
-                <Label htmlFor="insurance-no" className="font-normal cursor-pointer">
-                  No, I do not have auto insurance at this time
-                </Label>
+                <Label htmlFor="insurance-no" className="font-normal cursor-pointer">No</Label>
               </div>
             </RadioGroup>
             {errors.autoInsurance && (
               <p className="text-sm text-destructive">{errors.autoInsurance.message}</p>
             )}
           </div>
+        </div>
 
+        {/* Availability */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">Availability</h2>
+          
           <div className="space-y-3">
-            <Label>Do you have reliable transportation? *</Label>
-            <RadioGroup
-              value={watchedData.reliableTransport?.toString()}
-              onValueChange={(value) => setValue("reliableTransport", value === "true")}
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="true" id="transport-yes" />
-                <Label htmlFor="transport-yes" className="font-normal cursor-pointer">Yes</Label>
+            <Label>What are your available hours to work? *</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {availabilityOptions.map((option) => (
+                <div key={option} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`availability-${option}`}
+                    checked={watchedData.availability?.includes(option as any)}
+                    onCheckedChange={(checked) => {
+                      const current = watchedData.availability || [];
+                      if (checked) {
+                        setValue("availability", [...current, option as any]);
+                      } else {
+                        setValue("availability", current.filter(item => item !== option));
+                      }
+                    }}
+                  />
+                  <Label htmlFor={`availability-${option}`} className="font-normal cursor-pointer">
+                    {option}
+                  </Label>
+                </div>
+              ))}
+            </div>
+            {errors.availability && (
+              <p className="text-sm text-destructive">{errors.availability.message}</p>
+            )}
+          </div>
+
+          {/* Weekly Hours */}
+          <div className="space-y-4">
+            <Label>How many hours would you like to work a week? *</Label>
+            <div className="space-y-4">
+              <Slider
+                value={[watchedData.weeklyHours]}
+                onValueChange={([value]) => setValue("weeklyHours", value)}
+                max={80}
+                min={5}
+                step={1}
+                className="w-full"
+              />
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>5 hours</span>
+                <div className="flex items-center space-x-2">
+                  <Input
+                    type="number"
+                    min={5}
+                    max={80}
+                    value={watchedData.weeklyHours}
+                    onChange={(e) => setValue("weeklyHours", parseInt(e.target.value) || 5)}
+                    className="w-20 text-center"
+                  />
+                  <span>hours/week</span>
+                </div>
+                <span>80 hours</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="false" id="transport-no" />
-                <Label htmlFor="transport-no" className="font-normal cursor-pointer">No</Label>
-              </div>
-            </RadioGroup>
-            {errors.reliableTransport && (
-              <p className="text-sm text-destructive">{errors.reliableTransport.message}</p>
+            </div>
+            {errors.weeklyHours && (
+              <p className="text-sm text-destructive">{errors.weeklyHours.message}</p>
             )}
           </div>
         </div>
 
-        {/* Location Preference */}
-        <div className="space-y-2">
-          <Label htmlFor="locationPref">Do you have a location preference (zones) in the city?</Label>
-          <Textarea
-            id="locationPref"
-            {...register("locationPref")}
-            placeholder="e.g., Northwest, Midtown, ZIPs 30308/30309"
-            className="min-h-[80px]"
-          />
-          {errors.locationPref && (
-            <p className="text-sm text-destructive">{errors.locationPref.message}</p>
-          )}
-        </div>
-
-        {/* Availability */}
-        <div className="space-y-3">
-          <Label>What are your available hours to work? *</Label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {availabilityOptions.map((option) => (
-              <div key={option} className="flex items-center space-x-2">
-                <Checkbox
-                  id={`availability-${option}`}
-                  checked={watchedData.availability?.includes(option as any)}
-                  onCheckedChange={(checked) => {
-                    const current = watchedData.availability || [];
-                    if (checked) {
-                      setValue("availability", [...current, option as any]);
-                    } else {
-                      setValue("availability", current.filter(item => item !== option));
-                    }
-                  }}
-                />
-                <Label htmlFor={`availability-${option}`} className="font-normal cursor-pointer">
-                  {option}
-                </Label>
-              </div>
-            ))}
-          </div>
-          {errors.availability && (
-            <p className="text-sm text-destructive">{errors.availability.message}</p>
-          )}
-        </div>
-
-        {/* Weekly Hours */}
+        {/* Languages - Optional */}
         <div className="space-y-4">
-          <Label>How many hours would you like to work a week? *</Label>
-          <div className="space-y-4">
-            <Slider
-              value={[watchedData.weeklyHours]}
-              onValueChange={([value]) => setValue("weeklyHours", value)}
-              max={80}
-              min={5}
-              step={1}
-              className="w-full"
-            />
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>5 hours</span>
-              <div className="flex items-center space-x-2">
-                <Input
-                  type="number"
-                  min={5}
-                  max={80}
-                  value={watchedData.weeklyHours}
-                  onChange={(e) => setValue("weeklyHours", parseInt(e.target.value) || 5)}
-                  className="w-20 text-center"
-                />
-                <span>hours/week</span>
-              </div>
-              <span>80 hours</span>
+          <h2 className="text-lg font-semibold text-foreground">Languages (Optional)</h2>
+          
+          <div className="space-y-3">
+            <Label>Languages spoken</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {languageOptions.map((language) => (
+                <div key={language} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`language-${language}`}
+                    checked={watchedData.languages?.includes(language)}
+                    onCheckedChange={(checked) => {
+                      const current = watchedData.languages || [];
+                      if (checked) {
+                        setValue("languages", [...current, language]);
+                      } else {
+                        setValue("languages", current.filter(item => item !== language));
+                      }
+                    }}
+                  />
+                  <Label htmlFor={`language-${language}`} className="font-normal cursor-pointer">
+                    {language}
+                  </Label>
+                </div>
+              ))}
             </div>
+            <p className="text-xs text-muted-foreground">Select all languages you can communicate in</p>
           </div>
-          {errors.weeklyHours && (
-            <p className="text-sm text-destructive">{errors.weeklyHours.message}</p>
-          )}
         </div>
 
         {/* Privacy Notice */}
@@ -379,7 +424,7 @@ export default function ApplicationForm() {
         <div className="pt-4">
           <Button
             type="submit"
-            disabled={!isValid || isSubmitting}
+            disabled={!isFormValid || isSubmitting}
             className="w-full h-12 text-base font-semibold"
           >
             {isSubmitting ? (

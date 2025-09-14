@@ -1,0 +1,33 @@
+{
+  "evaluationId": "eval_transcript_test_001_20250914_163315",
+  "timestamp": "2025-09-14T16:33:15.306874",
+  "sessionId": "transcript_test_001",
+  "candidateInfo": {
+    "firstName": "Alex",
+    "lastName": "Johnson",
+    "email": "alex.johnson@email.com",
+    "phone": "+1555123456",
+    "caregivingExperience": true,
+    "hasPerId": true,
+    "driversLicense": true,
+    "autoInsurance": true,
+    "availability": [
+      "Morning",
+      "Afternoon",
+      "Evening"
+    ],
+    "weeklyHours": 40,
+    "languages": [
+      "English"
+    ]
+  },
+  "transcript": "Interviewer: Thanks for joining today. To start, have you ever worked as a caregiver? What kinds of patients or customers did you work with, and what services or activities did you perform?\nCandidate: Sure—yes. I've worked about two years as a home caregiver supporting mostly seniors and a few post-operative clients. Day to day I handled bathing, dressing, light meal prep, medication reminders, basic mobility support, and checking vitals like temperature and blood pressure. I also did light housekeeping and kept simple notes for families.\nInterviewer: Imagine you're finding a caregiver for a loved one. What traits or skills would be most important?\nCandidate: Patience and reliability, for sure. I'd want someone who communicates clearly, follows the care plan, and respects routines. Basic safety awareness—like how to prevent falls—and being calm under pressure matter too.\nInterviewer: How has your prior work or life experience helped you build the skills to be a good caregiver?\nCandidate: My last role taught me to stay organized and to follow instructions from nurses and families. I learned to prioritize when several tasks compete, and to stay calm when a client is having a tough day. Keeping notes improved my communication.\nInterviewer: Why do you want to be a caregiver? What are the most rewarding aspects?\nCandidate: I like helping people feel safe at home. The best part is when a client is comfortable and you can tell you made their day easier—like when someone says they slept better or enjoyed a meal you made.\nInterviewer: Tell me about a time when being late caused problems for you or your team. What did you learn?\nCandidate: I was late once because a bus broke down. My client missed a short morning walk we usually do. I called ahead to let them know and apologized when I arrived. After that, I started leaving earlier and checking transit updates before I left.\nInterviewer: Have you ever adjusted your routine to ensure punctuality at work? What changes did you make?\nCandidate: Yes. I prep my clothes and lunch the night before and set two alarms. I also check the route on my phone in the morning, which has helped me be on time more consistently.\nInterviewer: Tell me about a time when you cared for a senior. What was most difficult, and what was most meaningful?\nCandidate: I supported a client with memory issues. The hardest part was answering the same questions repeatedly without sounding impatient. I learned to keep a steady routine and use simple, reassuring answers. The meaningful part was seeing her relax and smile more over time.\nInterviewer: Tell me about a time when you helped a colleague or client who was struggling emotionally or professionally. What did you do?\nCandidate: A coworker was overwhelmed during a busy week. I asked privately if they were okay, listened for a few minutes, and offered to swap a task so they could finish charting. That seemed to help.\nInterviewer: If we asked your coworkers about you, what are three things they would say?\nCandidate: Dependable, polite, and patient.",
+  "scores": {
+    "Experience & Skills": 10.0,
+    "Motivation": 7.5,
+    "Punctuality": 10.0,
+    "Compassion and Empathy": 7.5,
+    "Communication": 7.5
+  },
+  "overallScore": 8.5
+}

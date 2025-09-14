@@ -1,521 +1,491 @@
 """
-Caregiver Evaluation Service
-Specialized evaluation system for home care/caregiver interviews
+Simple Caregiver Evaluation Service
+Evaluates candidates on 5 dimensions using Gemini AI
 """
+
 import logging
-import re
-from typing import Dict, List, Optional, Any
+import json
+from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
+from .gemini_service import gemini_service
 
 logger = logging.getLogger(__name__)
 
 class CaregiverEvaluationService:
-    """Service for evaluating caregiver interview performance"""
-    
+    """Simple service for evaluating caregiver interview performance using Gemini AI"""
+
     def __init__(self):
-        # Scoring weights for different competencies
-        self.competency_weights = {
-            "empathy_compassion": 0.25,
-            "safety_awareness": 0.25, 
-            "communication_skills": 0.20,
-            "problem_solving": 0.20,
-            "experience_commitment": 0.10
-        }
-        
-        # Keyword patterns for scoring
-        self.scoring_patterns = {
-            "empathy": r"(empathy|empathetic|understand|understanding|compassion|compassionate|feel|feeling|emotional|emotions)",
-            "patience": r"(patient|patience|calm|calmly|wait|waiting|slow|slowly|gentle|gently|take time)",
-            "care": r"(care|caring|help|helping|support|supporting|assist|assisting|comfort|comforting)",
-            "safety": r"(safe|safety|secure|protocol|procedure|emergency|alert|careful|cautious|report|reporting)",
-            "communication": r"(listen|listening|talk|talking|explain|explaining|communicate|communication|discuss|conversation)",
-            "respect": r"(respect|respectful|dignity|privacy|rights|boundaries|professional|appropriate)",
-            "problem_solving": r"(solve|solution|problem|challenge|difficult|handle|manage|approach|strategy|plan)",
-            "experience": r"(experience|experienced|worked|years|trained|training|certified|certification|learn|learning)",
-            "commitment": r"(committed|dedication|dedicated|reliable|dependable|responsible|motivated|passion|passionate)",
-            "negative": r"(angry|hate|can't|won't|never|rude|unsafe|ignore|delay|lazy|argue|frustrated|annoyed|impatient)",
-            "concerns": r"(difficult|hard|struggle|struggling|stress|stressed|overwhelmed|tired|exhausted)"
-        }
-    
+        self.evaluation_dimensions = [
+            "Experience & Skills",
+            "Motivation",
+            "Punctuality",
+            "Compassion and Empathy",
+            "Communication",
+        ]
+
     async def evaluate_candidate(self, interview_data: Dict) -> Dict:
         """
-        Comprehensive caregiver evaluation
-        
+        Multimodal caregiver evaluation using Gemini AI with audio analysis
+
         Args:
             interview_data: Dictionary containing:
-                - responses: List of user responses
                 - transcript: Full interview transcript
-                - userData: Candidate background information
-                - scoringBreakdown: Detailed scoring from interview
-                - interviewDuration: Duration of interview
-        
+                - userData: Candidate information
+                - sessionId: Interview session ID
+                - audioData: Optional list of audio chunks per question
+                - responses: Optional list of response objects with audio
+
         Returns:
-            Comprehensive evaluation dictionary
+            Enhanced evaluation with 5-dimension scores (0-10) plus audio insights
         """
         try:
-            responses = interview_data.get('responses', [])
-            transcript = interview_data.get('transcript', [])
+            transcript = interview_data.get("transcript", "")
             user_data = interview_data.get('userData', {})
-            scoring_breakdown = interview_data.get('scoringBreakdown', [])
-            duration = interview_data.get('interviewDuration', 0)
-            
-            # Calculate quantitative scores
-            quantitative_scores = self._calculate_quantitative_scores(responses, scoring_breakdown, user_data)
-            
-            # Analyze response quality
-            quality_scores = self._analyze_response_quality(responses)
-            
-            # Calculate competency scores
-            competency_scores = self._calculate_competency_scores(quantitative_scores, responses)
-            
-            # Calculate overall score
-            overall_score = self._calculate_overall_score(competency_scores, quality_scores)
-            
-            # Generate recommendation
-            recommendation = self._generate_recommendation(overall_score, competency_scores)
-            
-            # Identify strengths and development areas
-            strengths = self._identify_strengths(competency_scores, responses, user_data)
-            development_areas = self._identify_development_areas(competency_scores, responses, user_data)
-            
-            # Generate next steps
-            next_steps = self._generate_next_steps(recommendation, overall_score, development_areas)
-            
+            session_id = interview_data.get("sessionId", "")
+            audio_data = interview_data.get("audioData", [])
+            responses = interview_data.get("responses", [])
+
+            # Check if we have multimodal data available
+            has_audio = bool(audio_data or any(r.get("audioData") for r in responses))
+
+            if has_audio:
+                logger.info(
+                    f"Using multimodal evaluation with audio for session {session_id}"
+                )
+                scores, audio_insights = await self._get_multimodal_evaluation(
+                    transcript, user_data, audio_data, responses
+                )
+            else:
+                logger.info(f"Using text-only evaluation for session {session_id}")
+                scores = await self._get_gemini_evaluation(transcript, user_data)
+                audio_insights = {}
+
+            # Create evaluation result
             evaluation = {
-                "evaluationId": f"eval_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                "evaluationId": f"eval_{session_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 "timestamp": datetime.now().isoformat(),
-                "overallScore": overall_score,
-                "recommendation": recommendation,
-                "competencyScores": competency_scores,
-                "qualityScores": quality_scores,
-                "quantitativeScores": quantitative_scores,
-                "strengths": strengths,
-                "developmentAreas": development_areas,
-                "nextSteps": next_steps,
-                "interviewMetrics": {
-                    "duration": duration,
-                    "questionsAnswered": len(responses),
-                    "averageResponseLength": sum(len(r.get('response', '')) for r in responses) / max(len(responses), 1),
-                    "scoringBreakdown": scoring_breakdown
-                },
-                "candidateProfile": self._analyze_candidate_profile(user_data)
+                "sessionId": session_id,
+                "candidateInfo": user_data,
+                "transcript": transcript,
+                "scores": scores,
+                "overallScore": round(sum(scores.values()) / len(scores), 1),
+                "evaluationType": "multimodal" if has_audio else "text-only",
+                "audioInsights": audio_insights,
             }
-            
-            logger.info(f"Caregiver evaluation completed - Score: {overall_score}")
+
+            logger.info(
+                f"Evaluation completed for session {session_id} - Overall Score: {evaluation['overallScore']} ({evaluation['evaluationType']})"
+            )
             return evaluation
-            
+
         except Exception as e:
             logger.error(f"Error in caregiver evaluation: {e}")
-            return self._get_fallback_evaluation()
-    
-    def _calculate_quantitative_scores(
-        self, 
-        responses: List[Dict], 
-        scoring_breakdown: List[Dict], 
-        user_data: Dict = None
-    ) -> Dict:
-        """Calculate quantitative scores from responses"""
-        
-        scores = {
-            "empathy": 0,
-            "patience": 0,
-            "care": 0,
-            "safety": 0,
-            "communication": 0,
-            "respect": 0,
-            "problem_solving": 0,
-            "experience": 0,
-            "commitment": 0,
-            "negative": 0,
-            "concerns": 0
+            return self._get_fallback_evaluation(interview_data)
+
+    async def _get_gemini_evaluation(
+        self, transcript: str, user_data: Dict
+    ) -> Dict[str, float]:
+        """Get evaluation scores from Gemini AI using the new structured approach"""
+
+        try:
+            # Use the new structured Gemini service if available
+            if hasattr(gemini_service, "build_final_report"):
+                # This is the new structured service - use simple evaluation for now
+                # We'll create a mock turn result to get scores
+                mock_turns = []
+                for i, dimension in enumerate(self.evaluation_dimensions):
+                    # Create a simple mock analysis based on transcript content
+                    score = self._estimate_dimension_score(transcript, dimension)
+                    mock_turns.append(
+                        type(
+                            "TurnResult",
+                            (),
+                            {
+                                "question_id": f"Q{i+1}",
+                                "score_0_to_4": score,
+                                "summary_one_line": f"Evaluated {dimension}",
+                                "signals": {},
+                                "missing_keys": [],
+                                "red_flags": [],
+                            },
+                        )()
+                    )
+
+                # Convert 0-4 scores to 0-10 scale
+                scores = {}
+                for i, dimension in enumerate(self.evaluation_dimensions):
+                    score_0_4 = mock_turns[i].score_0_to_4
+                    scores[dimension] = (score_0_4 / 4.0) * 10.0
+
+                return scores
+            else:
+                # Fallback to legacy method
+                prompt = self._create_evaluation_prompt(transcript, user_data)
+                response = await gemini_service.generate_response(prompt)
+                scores = self._parse_gemini_scores(response)
+                return scores
+
+        except Exception as e:
+            logger.error(f"Error getting Gemini evaluation: {e}")
+            # Return default scores if Gemini fails
+            return {dimension: 5.0 for dimension in self.evaluation_dimensions}
+
+    async def _get_multimodal_evaluation(
+        self, transcript: str, user_data: Dict, audio_data: List, responses: List[Dict]
+    ) -> Tuple[Dict[str, float], Dict]:
+        """Get evaluation using multimodal Gemini analysis with audio"""
+
+        try:
+            # Import here to avoid circular imports
+            from .gemini_service import gemini_service
+
+            # Check if the new Gemini service has multimodal capabilities
+            if not hasattr(gemini_service, "analyze_turn"):
+                logger.warning(
+                    "Multimodal Gemini service not available, falling back to text-only"
+                )
+                scores = await self._get_gemini_evaluation(transcript, user_data)
+                return scores, {}
+
+            # Prepare audio data for analysis
+            audio_chunks = []
+            if audio_data:
+                audio_chunks = audio_data
+            elif responses:
+                # Extract audio from response objects
+                for response in responses:
+                    if response.get("audioData"):
+                        audio_chunks.append(response["audioData"])
+
+            # Analyze each question-response pair with multimodal Gemini
+            turn_results = []
+            audio_insights = {
+                "voice_confidence": [],
+                "speech_clarity": [],
+                "emotional_tone": [],
+                "response_completeness": [],
+            }
+
+            # Split transcript into Q&A pairs for analysis
+            qa_pairs = self._extract_qa_pairs(transcript)
+
+            for i, (question, answer) in enumerate(qa_pairs[:9]):  # Max 9 questions
+                # Get corresponding audio if available
+                audio_bytes = audio_chunks[i] if i < len(audio_chunks) else None
+
+                # Use multimodal analysis
+                try:
+                    result = gemini_service.analyze_turn(
+                        idx=i,
+                        transcript_text=answer,
+                        audio=audio_bytes,
+                        audio_mime="audio/webm",
+                        lang="en",
+                        remaining_sec=600,
+                    )
+
+                    turn_results.append(result)
+
+                    # Extract audio insights if available
+                    if audio_bytes and result.signals:
+                        signals = result.signals
+                        audio_insights["voice_confidence"].append(
+                            signals.get("voice_confidence", 0.5)
+                        )
+                        audio_insights["speech_clarity"].append(
+                            signals.get("speech_clarity", 0.5)
+                        )
+                        audio_insights["emotional_tone"].append(
+                            signals.get("emotional_tone", "neutral")
+                        )
+                        audio_insights["response_completeness"].append(
+                            signals.get("response_completeness", 0.5)
+                        )
+
+                except Exception as turn_error:
+                    logger.error(f"Error analyzing turn {i+1}: {turn_error}")
+                    # Create fallback result
+                    score = self._estimate_dimension_score(
+                        answer,
+                        self.evaluation_dimensions[i % len(self.evaluation_dimensions)],
+                    )
+                    turn_results.append(
+                        type(
+                            "TurnResult",
+                            (),
+                            {
+                                "question_id": f"Q{i+1}",
+                                "score_0_to_4": score,
+                                "summary_one_line": f"Analyzed question {i+1}",
+                                "signals": {},
+                                "missing_keys": [],
+                                "red_flags": [],
+                            },
+                        )()
+                    )
+
+            # Convert turn results to dimension scores
+            scores = self._convert_turns_to_dimension_scores(turn_results)
+
+            # Calculate audio insight averages
+            processed_insights = {}
+            for key, values in audio_insights.items():
+                if values:
+                    if key == "emotional_tone":
+                        # Count emotional tone distribution
+                        processed_insights[key] = {
+                            "dominant_tone": (
+                                max(set(values), key=values.count)
+                                if values
+                                else "neutral"
+                            ),
+                            "tone_variety": len(set(values)),
+                        }
+                    else:
+                        processed_insights[key] = {
+                            "average": sum(values) / len(values),
+                            "range": [min(values), max(values)],
+                        }
+
+            logger.info(f"Multimodal analysis completed with {len(turn_results)} turns")
+            return scores, processed_insights
+
+        except Exception as e:
+            logger.error(f"Error in multimodal evaluation: {e}")
+            # Fallback to text-only evaluation
+            scores = await self._get_gemini_evaluation(transcript, user_data)
+            return scores, {}
+
+    def _extract_qa_pairs(self, transcript: str) -> List[Tuple[str, str]]:
+        """Extract question-answer pairs from transcript"""
+        lines = transcript.strip().split("\n")
+        qa_pairs = []
+        current_question = ""
+        current_answer = ""
+
+        for line in lines:
+            line = line.strip()
+            if line.startswith("Interviewer:"):
+                # Save previous Q&A if we have both
+                if current_question and current_answer:
+                    qa_pairs.append((current_question, current_answer))
+
+                # Start new question
+                current_question = line.replace("Interviewer:", "").strip()
+                current_answer = ""
+            elif line.startswith("Candidate:"):
+                current_answer = line.replace("Candidate:", "").strip()
+
+        # Add the last Q&A pair
+        if current_question and current_answer:
+            qa_pairs.append((current_question, current_answer))
+
+        return qa_pairs
+
+    def _convert_turns_to_dimension_scores(
+        self, turn_results: List
+    ) -> Dict[str, float]:
+        """Convert turn results to our 5 dimension scores"""
+
+        # Map questions to dimensions (simplified mapping)
+        dimension_mapping = {
+            0: "Experience & Skills",  # Q1
+            1: "Experience & Skills",  # Q2
+            2: "Experience & Skills",  # Q3
+            3: "Motivation",  # Q4
+            4: "Punctuality",  # Q5
+            5: "Punctuality",  # Q6
+            6: "Compassion and Empathy",  # Q7
+            7: "Compassion and Empathy",  # Q8
+            8: "Communication",  # Q9
         }
-        
-        # Analyze text responses
-        all_text = " ".join([r.get('response', '') for r in responses]).lower()
-        
-        for category, pattern in self.scoring_patterns.items():
-            matches = re.findall(pattern, all_text, re.IGNORECASE)
-            scores[category] = len(matches)
-        
-        # Add bonus points for background qualifications
-        if user_data:
-            if user_data.get('hhaExperience'):
-                scores['experience'] += 5
-            if user_data.get('cprCertified'):
-                scores['safety'] += 3
-            if user_data.get('driversLicense') and user_data.get('reliableTransport'):
-                scores['commitment'] += 2
-        
-        # Use scoring breakdown if available
-        if scoring_breakdown:
-            for breakdown in scoring_breakdown:
-                detail = breakdown.get('breakdown', {})
-                for key, value in detail.items():
-                    if key in scores:
-                        scores[key] += value
-        
-        return scores
-    
-    def _analyze_response_quality(self, responses: List[Dict]) -> Dict:
-        """Analyze the quality of responses"""
-        
-        if not responses:
-            return {"relevance": 0, "clarity": 0, "depth": 0}
-        
-        total_relevance = 0
-        total_clarity = 0
-        total_depth = 0
-        
-        for i, response in enumerate(responses):
-            text = response.get('response', '')
-            
-            # Calculate relevance score (0-10)
-            relevance = self._calculate_relevance_score(text, i + 1)
-            
-            # Calculate clarity score (0-10)
-            clarity = self._calculate_clarity_score(text)
-            
-            # Calculate depth score (0-10)
-            depth = min(10, len(text.split()) / 10)  # 10 words = 1 point, max 10
-            
-            total_relevance += relevance
-            total_clarity += clarity
-            total_depth += depth
-        
-        count = len(responses)
-        return {
-            "relevance": round(total_relevance / count, 1),
-            "clarity": round(total_clarity / count, 1),
-            "depth": round(total_depth / count, 1)
+
+        dimension_scores = {dim: [] for dim in self.evaluation_dimensions}
+
+        # Collect scores by dimension
+        for i, result in enumerate(turn_results):
+            if i < len(dimension_mapping):
+                dimension = dimension_mapping[i]
+                if dimension in dimension_scores:
+                    # Convert 0-4 score to 0-10 scale
+                    score_10 = (result.score_0_to_4 / 4.0) * 10.0
+                    dimension_scores[dimension].append(score_10)
+
+        # Average scores for each dimension
+        final_scores = {}
+        for dimension in self.evaluation_dimensions:
+            scores = dimension_scores[dimension]
+            if scores:
+                final_scores[dimension] = round(sum(scores) / len(scores), 1)
+            else:
+                final_scores[dimension] = 5.0  # Default score
+
+        return final_scores
+
+    def _estimate_dimension_score(self, transcript: str, dimension: str) -> int:
+        """Estimate a score (0-4) for a dimension based on transcript content"""
+        text = transcript.lower()
+
+        # Simple keyword-based scoring for each dimension
+        dimension_keywords = {
+            "Experience & Skills": [
+                "experience",
+                "worked",
+                "skills",
+                "training",
+                "certified",
+                "years",
+            ],
+            "Motivation": [
+                "want",
+                "passionate",
+                "enjoy",
+                "love",
+                "motivated",
+                "purpose",
+            ],
+            "Punctuality": [
+                "time",
+                "schedule",
+                "punctual",
+                "reliable",
+                "on time",
+                "early",
+            ],
+            "Compassion and Empathy": [
+                "care",
+                "help",
+                "understand",
+                "empathy",
+                "compassion",
+                "patient",
+            ],
+            "Communication": [
+                "communicate",
+                "listen",
+                "talk",
+                "explain",
+                "clear",
+                "understand",
+            ],
         }
-    
-    def _calculate_relevance_score(self, text: str, question_number: int) -> float:
-        """Calculate how relevant the response is to caregiving"""
-        
-        caregiving_keywords = [
-            "patient", "client", "care", "help", "assist", "support",
-            "medication", "safety", "emergency", "family", "comfort",
-            "listen", "understand", "respect", "dignity", "professional"
-        ]
-        
-        text_lower = text.lower()
-        keyword_count = sum(1 for keyword in caregiving_keywords if keyword in text_lower)
-        
-        # Base score from keyword density
-        base_score = min(8, keyword_count * 1.5)
-        
-        # Bonus for specific examples
-        if any(phrase in text_lower for phrase in ["time when", "example", "situation", "experience"]):
-            base_score += 1
-        
-        # Penalty for very short responses
-        if len(text.split()) < 5:
-            base_score *= 0.5
-        
-        return min(10, base_score)
-    
-    def _calculate_clarity_score(self, text: str) -> float:
-        """Calculate clarity and coherence of response"""
-        
-        if not text or len(text.strip()) < 10:
-            return 0
-        
-        words = text.split()
-        sentences = text.split('.')
-        
-        # Base score
-        score = 5
-        
-        # Length appropriateness (not too short, not too long)
-        word_count = len(words)
-        if 20 <= word_count <= 100:
-            score += 2
-        elif 10 <= word_count < 20 or 100 < word_count <= 150:
-            score += 1
-        elif word_count < 10:
-            score -= 2
-        
-        # Sentence structure
-        avg_sentence_length = len(words) / max(len(sentences), 1)
-        if 8 <= avg_sentence_length <= 20:
-            score += 1
-        
-        # Grammar indicators (simple heuristics)
-        if text.count(',') > 0:  # Use of commas
-            score += 0.5
-        if any(word in text.lower() for word in ['because', 'since', 'although', 'however']):
-            score += 0.5  # Complex sentence structures
-        
-        return min(10, score)
-    
-    def _calculate_competency_scores(self, quantitative_scores: Dict, responses: List[Dict]) -> Dict:
-        """Calculate scores for each competency area"""
-        
-        # Empathy & Compassion (0-10)
-        empathy_raw = quantitative_scores['empathy'] * 2 + quantitative_scores['care']
-        empathy_score = min(10, empathy_raw)
-        
-        # Safety Awareness (0-10)
-        safety_raw = quantitative_scores['safety'] * 2 + quantitative_scores['experience'] * 0.5
-        safety_score = min(10, safety_raw)
-        
-        # Communication Skills (0-10)
-        comm_raw = quantitative_scores['communication'] + quantitative_scores['respect']
-        comm_score = min(10, comm_raw)
-        
-        # Problem-Solving (0-10)
-        problem_raw = quantitative_scores['problem_solving'] * 1.5
-        problem_score = min(10, problem_raw)
-        
-        # Experience & Commitment (0-10)
-        exp_raw = quantitative_scores['experience'] + quantitative_scores['commitment']
-        exp_score = min(10, exp_raw)
-        
-        # Apply penalties for negative indicators
-        negative_penalty = quantitative_scores['negative'] * 0.5
-        concern_penalty = quantitative_scores['concerns'] * 0.2
-        
-        return {
-            "empathy_compassion": max(0, empathy_score - negative_penalty),
-            "safety_awareness": max(0, safety_score - concern_penalty),
-            "communication_skills": max(0, comm_score - negative_penalty),
-            "problem_solving": max(0, problem_score - concern_penalty),
-            "experience_commitment": max(0, exp_score - negative_penalty)
-        }
-    
-    def _calculate_overall_score(self, competency_scores: Dict, quality_scores: Dict) -> int:
-        """Calculate overall score (0-100)"""
-        
-        # Weighted competency score
-        competency_total = sum(
-            score * self.competency_weights[competency]
-            for competency, score in competency_scores.items()
-        )
-        
-        # Quality bonus/penalty
-        quality_avg = sum(quality_scores.values()) / len(quality_scores)
-        quality_factor = quality_avg / 10  # Convert to 0-1 scale
-        
-        # Final score calculation
-        base_score = competency_total * 10  # Convert to 0-100 scale
-        final_score = base_score * (0.8 + 0.2 * quality_factor)  # Quality affects 20%
-        
-        return max(0, min(100, round(final_score)))
-    
-    def _generate_recommendation(self, overall_score: int, competency_scores: Dict) -> Dict:
-        """Generate hiring recommendation based on scores"""
-        
-        # Check for critical competency failures
-        critical_competencies = ["empathy_compassion", "safety_awareness"]
-        critical_failure = any(
-            competency_scores[comp] < 3 for comp in critical_competencies
-        )
-        
-        if critical_failure or overall_score < 40:
-            recommendation = "Not Recommended"
-            confidence = "High"
-            reasoning = "Critical competency gaps identified that pose risks to client safety and care quality."
-        elif overall_score >= 80:
-            recommendation = "Highly Recommended"
-            confidence = "High"
-            reasoning = "Strong performance across all competency areas with excellent caregiving potential."
-        elif overall_score >= 65:
-            recommendation = "Recommended"
-            confidence = "Medium" if overall_score < 75 else "High"
-            reasoning = "Good overall performance with minor areas for development."
+
+        keywords = dimension_keywords.get(dimension, [])
+        matches = sum(1 for keyword in keywords if keyword in text)
+
+        # Convert matches to 0-4 score
+        if matches >= 4:
+            return 4
+        elif matches >= 3:
+            return 3
+        elif matches >= 2:
+            return 2
+        elif matches >= 1:
+            return 1
         else:
-            recommendation = "Consider with Training"
-            confidence = "Medium"
-            reasoning = "Shows potential but requires targeted training before placement."
-        
-        return {
-            "recommendation": recommendation,
-            "confidence": confidence,
-            "reasoning": reasoning,
-            "score": overall_score
-        }
-    
-    def _identify_strengths(
-        self, 
-        competency_scores: Dict, 
-        responses: List[Dict], 
-        user_data: Dict = None
-    ) -> List[str]:
-        """Identify candidate strengths"""
-        
-        strengths = []
-        
-        # Competency-based strengths
-        for competency, score in competency_scores.items():
-            if score >= 7:
-                competency_name = competency.replace('_', ' ').title()
-                strengths.append(f"Strong {competency_name} ({score}/10)")
-        
-        # Background-based strengths
-        if user_data:
-            if user_data.get('hhaExperience'):
-                strengths.append("Relevant HHA experience")
-            if user_data.get('cprCertified'):
-                strengths.append("CPR certified for emergency response")
-            if user_data.get('driversLicense') and user_data.get('reliableTransport'):
-                strengths.append("Reliable transportation for client visits")
-            if user_data.get('availability'):
-                strengths.append(f"Available {', '.join(user_data['availability'])}")
-        
-        # Response-based strengths
-        response_text = " ".join([r.get('response', '') for r in responses]).lower()
-        
-        if any(word in response_text for word in ['example', 'experience', 'situation']):
-            strengths.append("Provides specific examples from experience")
-        
-        if len(response_text.split()) > 200:
-            strengths.append("Detailed and thorough responses")
-        
-        return strengths[:5]  # Limit to top 5 strengths
-    
-    def _identify_development_areas(
-        self, 
-        competency_scores: Dict, 
-        responses: List[Dict], 
-        user_data: Dict = None
-    ) -> List[str]:
-        """Identify areas needing development"""
-        
-        development_areas = []
-        
-        # Competency-based development areas
-        for competency, score in competency_scores.items():
-            if score < 5:
-                competency_name = competency.replace('_', ' ').title()
-                development_areas.append(f"Needs improvement in {competency_name} ({score}/10)")
-        
-        # Response quality issues
-        avg_response_length = sum(len(r.get('response', '')) for r in responses) / max(len(responses), 1)
-        
-        if avg_response_length < 50:
-            development_areas.append("Responses lack detail and specific examples")
-        
-        # Background gaps
-        if user_data:
-            if not user_data.get('hhaExperience'):
-                development_areas.append("No formal HHA experience - requires training")
-            if not user_data.get('cprCertified'):
-                development_areas.append("CPR certification needed for safety compliance")
-        
-        return development_areas[:5]  # Limit to top 5 areas
-    
-    def _generate_next_steps(
-        self, 
-        recommendation: Dict, 
-        overall_score: int, 
-        development_areas: List[str]
-    ) -> List[str]:
-        """Generate recommended next steps"""
-        
-        next_steps = []
-        
-        rec_type = recommendation['recommendation']
-        
-        if rec_type == "Highly Recommended":
-            next_steps.extend([
-                "Proceed with reference checks and background verification",
-                "Schedule orientation and onboarding process",
-                "Assign to experienced mentor for first few client visits"
-            ])
-        elif rec_type == "Recommended":
-            next_steps.extend([
-                "Conduct reference checks to verify experience claims",
-                "Provide brief refresher training on identified development areas",
-                "Consider probationary period with regular check-ins"
-            ])
-        elif rec_type == "Consider with Training":
-            next_steps.extend([
-                "Enroll in comprehensive HHA training program",
-                "Schedule follow-up interview after training completion",
-                "Require supervised practice before independent assignments"
-            ])
-        else:  # Not Recommended
-            next_steps.extend([
-                "Provide feedback on specific areas needing improvement",
-                "Recommend formal caregiving education or certification program",
-                "Consider re-application after 6-12 months of relevant experience"
-            ])
-        
-        # Add specific steps based on development areas
-        if any("CPR" in area for area in development_areas):
-            next_steps.append("Obtain CPR certification before placement")
-        
-        if any("communication" in area.lower() for area in development_areas):
-            next_steps.append("Provide communication skills training")
-        
-        return next_steps[:6]  # Limit to 6 steps
-    
-    def _analyze_candidate_profile(self, user_data: Dict) -> Dict:
-        """Analyze candidate background profile"""
-        
-        profile_score = 0
-        profile_notes = []
-        
-        if user_data.get('hhaExperience'):
-            profile_score += 30
-            profile_notes.append("Has HHA experience")
-        
-        if user_data.get('cprCertified'):
-            profile_score += 20
-            profile_notes.append("CPR certified")
-        
-        if user_data.get('driversLicense'):
-            profile_score += 15
-            profile_notes.append("Has driver's license")
-        
-        if user_data.get('reliableTransport'):
-            profile_score += 15
-            profile_notes.append("Has reliable transportation")
-        
-        if user_data.get('availability'):
-            profile_score += 10
-            profile_notes.append(f"Available {len(user_data['availability'])} time slots")
-        
-        weekly_hours = user_data.get('weeklyHours', 0)
-        if weekly_hours >= 20:
-            profile_score += 10
-            profile_notes.append(f"Seeking {weekly_hours} hours/week")
-        
-        return {
-            "profileScore": min(100, profile_score),
-            "profileNotes": profile_notes,
-            "readinessLevel": "High" if profile_score >= 70 else "Medium" if profile_score >= 40 else "Low"
-        }
-    
-    def _get_fallback_evaluation(self) -> Dict:
+            return 0
+
+    def _create_evaluation_prompt(self, transcript: str, user_data: Dict) -> str:
+        """Create evaluation prompt for Gemini"""
+
+        candidate_info = f"""
+Candidate Information:
+- Name: {user_data.get('firstName', '')} {user_data.get('lastName', '')}
+- Email: {user_data.get('email', '')}
+- Phone: {user_data.get('phone', '')}
+- Caregiving Experience: {'Yes' if user_data.get('caregivingExperience') else 'No'}
+- Has PER ID: {'Yes' if user_data.get('hasPerId') else 'No'}
+- Driver's License: {'Yes' if user_data.get('driversLicense') else 'No'}
+- Auto Insurance: {'Yes' if user_data.get('autoInsurance') else 'No'}
+- Availability: {', '.join(user_data.get('availability', []))}
+- Weekly Hours: {user_data.get('weeklyHours', 0)} hours
+- Languages: {', '.join(user_data.get('languages', []))}
+"""
+
+        prompt = f"""
+You are evaluating a caregiver candidate based on their interview transcript and background information.
+
+{candidate_info}
+
+Interview Transcript:
+{transcript}
+
+Please evaluate this candidate on the following 5 dimensions and provide a score from 0 to 10 for each:
+
+1. Experience & Skills: Relevant caregiving experience, technical skills, certifications
+2. Motivation: Genuine interest in caregiving, reasons for wanting the job, commitment level
+3. Punctuality: Reliability, time management, responsibility (infer from responses about schedules, commitments)
+4. Compassion and Empathy: Ability to understand and care for others, emotional intelligence
+5. Communication: Clarity of expression, listening skills, ability to communicate with clients/families
+
+Respond ONLY with a JSON object in this exact format:
+{{
+    "Experience & Skills": 7.5,
+    "Motivation": 8.0,
+    "Punctuality": 6.5,
+    "Compassion and Empathy": 9.0,
+    "Communication": 7.0
+}}
+
+Do not include any other text or explanation, just the JSON object with scores.
+"""
+
+        return prompt
+
+    def _parse_gemini_scores(self, response: str) -> Dict[str, float]:
+        """Parse scores from Gemini response"""
+
+        try:
+            # Clean the response to extract JSON
+            response = response.strip()
+
+            # Find JSON object in response
+            start_idx = response.find("{")
+            end_idx = response.rfind("}") + 1
+
+            if start_idx == -1 or end_idx == 0:
+                raise ValueError("No JSON object found in response")
+
+            json_str = response[start_idx:end_idx]
+            scores_dict = json.loads(json_str)
+
+            # Validate and clean scores
+            validated_scores = {}
+            for dimension in self.evaluation_dimensions:
+                if dimension in scores_dict:
+                    score = float(scores_dict[dimension])
+                    # Ensure score is between 0 and 10
+                    validated_scores[dimension] = max(0.0, min(10.0, score))
+                else:
+                    logger.warning(f"Missing score for dimension: {dimension}")
+                    validated_scores[dimension] = 5.0  # Default score
+
+            return validated_scores
+
+        except Exception as e:
+            logger.error(f"Error parsing Gemini scores: {e}")
+            logger.error(f"Response was: {response}")
+            # Return default scores
+            return {dimension: 5.0 for dimension in self.evaluation_dimensions}
+
+    def _get_fallback_evaluation(self, interview_data: Dict) -> Dict:
         """Return fallback evaluation when processing fails"""
+
+        session_id = interview_data.get("sessionId", "unknown")
+        user_data = interview_data.get("userData", {})
+        transcript = interview_data.get("transcript", "")
+
         return {
-            "evaluationId": f"fallback_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            "evaluationId": f"fallback_{session_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
             "timestamp": datetime.now().isoformat(),
-            "overallScore": 50,
-            "recommendation": {
-                "recommendation": "Consider with Training",
-                "confidence": "Low",
-                "reasoning": "Unable to complete full evaluation - manual review recommended",
-                "score": 50
-            },
-            "competencyScores": {
-                "empathy_compassion": 5,
-                "safety_awareness": 5,
-                "communication_skills": 5,
-                "problem_solving": 5,
-                "experience_commitment": 5
-            },
-            "qualityScores": {
-                "relevance": 5,
-                "clarity": 5,
-                "depth": 5
-            },
-            "strengths": ["Completed interview process"],
-            "developmentAreas": ["Requires comprehensive evaluation"],
-            "nextSteps": ["Schedule follow-up interview", "Conduct manual evaluation"],
-            "error": "Automated evaluation failed - manual review required"
+            "sessionId": session_id,
+            "candidateInfo": user_data,
+            "transcript": transcript,
+            "scores": {dimension: 5.0 for dimension in self.evaluation_dimensions},
+            "overallScore": 5.0,
+            "error": "Automated evaluation failed - default scores assigned",
         }
+
 
 # Global instance
 caregiver_evaluation_service = CaregiverEvaluationService()

@@ -52,7 +52,7 @@ FRAMES_PER_BUFFER = END_SIL_MS // CHUNK_MS  # Number of frames for silence detec
 
 class AudioSession:
     """Manages audio processing state and interview session for a WebSocket connection"""
-    
+
     def __init__(self, websocket: WebSocket):
         self.websocket = websocket
         self.vad = webrtcvad.Vad(VAD_MODE)
@@ -61,38 +61,42 @@ class AudioSession:
         self.silence_frames = 0
         self.audio_buffer = bytearray()
         self.session_id = str(uuid.uuid4())
-        
+
         # Ring buffer for recent frames (for context)
         self.frame_buffer = deque(maxlen=FRAMES_PER_BUFFER * 2)
-        
+
         # Interview session management
         self.interview_session = InterviewSession(self.session_id)
         self.interview_started = False
         self.current_transcript = ""
-        
+
         # Enhanced pause tolerance for natural conversation
         self.last_transcription_time = None
         self.response_continuation_window = 10.0  # 10 seconds to continue a response
         self.accumulated_response = ""  # Store partial responses
         self.waiting_for_continuation = False
-        
+
+        # Audio capture for multimodal evaluation
+        self.current_response_audio = bytearray()  # Capture audio for current response
+        self.response_audio_chunks = []  # Store audio for each response
+
         logger.info(f"🎤 New audio session created: {self.session_id}")
-    
+
     async def cleanup(self) -> None:
         """Clean up session resources"""
         try:
             # Process any remaining accumulated response
             if self.accumulated_response and self.interview_started:
                 await self._send_final_response(self.accumulated_response)
-            
+
             # Clear buffers
             self.audio_buffer.clear()
             self.frame_buffer.clear()
-            
+
             logger.info(f"🧹 Session cleaned up: {self.session_id}")
         except Exception as e:
             logger.error(f"❌ Error during session cleanup: {e}")
-    
+
     async def _send_error(self, error_message: str) -> None:
         """Send error message to client"""
         try:
@@ -105,7 +109,7 @@ class AudioSession:
             await self.websocket.send_text(json.dumps(message))
         except Exception as e:
             logger.error(f"❌ Error sending error message: {e}")
-    
+
     async def process_audio_frame(self, frame_data: bytes) -> None:
         """Process a single audio frame with VAD and transcription logic"""
         try:
@@ -113,65 +117,73 @@ class AudioSession:
             if len(frame_data) != FRAME_BYTES:
                 logger.warning(f"Invalid frame size: {len(frame_data)} != {FRAME_BYTES}")
                 return
-            
+
             logger.debug(f"📥 Received audio frame: {len(frame_data)} bytes")
-            
+
             # Add frame to ring buffer
             self.frame_buffer.append(frame_data)
-            
+
             # Run VAD on this frame
             is_voice = self.vad.is_speech(frame_data, SAMPLE_RATE)
-            
+
             # Update voice activity state machine
             await self._update_voice_activity(is_voice, frame_data)
-            
+
         except Exception as e:
             logger.error(f"❌ Error processing audio frame: {e}")
-    
+
     async def _update_voice_activity(self, is_voice: bool, frame_data: bytes) -> None:
         """Update voice activity state and handle transcription"""
-        
+
         if is_voice:
             self.voice_frames += 1
             self.silence_frames = 0
-            
+
             # Add frame to transcription buffer
             self.audio_buffer.extend(frame_data)
-            
+
+            # Also capture for multimodal evaluation if interview started
+            if self.interview_started:
+                self.current_response_audio.extend(frame_data)
+
             # Start speaking if we cross the threshold
             if not self.is_speaking and self.voice_frames >= VOICE_START_THRESHOLD:
                 self.is_speaking = True
                 await self._send_voice_activity(True)
                 logger.debug(f"🗣️ Voice activity started (session: {self.session_id})")
-        
+
         else:
             self.silence_frames += 1
             self.voice_frames = 0
-            
+
             # Continue buffering during short pauses
             if self.is_speaking:
                 self.audio_buffer.extend(frame_data)
-            
+
+                # Also capture silence for complete response audio
+                if self.interview_started:
+                    self.current_response_audio.extend(frame_data)
+
             # End speaking if we have enough silence
             if self.is_speaking and self.silence_frames >= VOICE_END_THRESHOLD:
                 await self._end_voice_activity()
-    
+
     async def _end_voice_activity(self) -> None:
         """End voice activity and transcribe accumulated audio"""
         self.is_speaking = False
         await self._send_voice_activity(False)
-        
+
         logger.debug(f"🔇 Voice activity ended (session: {self.session_id})")
-        
+
         # Transcribe the accumulated audio
         if len(self.audio_buffer) > 0:
             await self._transcribe_buffer()
-        
+
         # Reset for next utterance
         self.audio_buffer.clear()
         self.voice_frames = 0
         self.silence_frames = 0
-    
+
     async def _transcribe_buffer(self) -> None:
         """Transcribe the current audio buffer"""
         try:
@@ -180,20 +192,20 @@ class AudioSession:
             if len(self.audio_buffer) < min_audio_bytes:
                 logger.debug(f"Audio buffer too small for transcription: {len(self.audio_buffer)} < {min_audio_bytes} bytes")
                 return
-            
+
             logger.info(f"🎯 Transcribing {len(self.audio_buffer)} bytes of audio")
-            
+
             # Transcribe using Gemini Audio service
             transcript, is_final = gemini_audio_service.transcribe_int16_pcm(bytes(self.audio_buffer))
-            
+
             if transcript and is_final and len(transcript.strip()) > 5:  # Require meaningful text
                 await self._send_transcript(transcript, is_final)
             else:
                 logger.debug(f"Transcript too short or empty: '{transcript}'")
-            
+
         except Exception as e:
             logger.error(f"❌ Transcription error: {e}")
-    
+
     async def _send_voice_activity(self, speaking: bool) -> None:
         """Send voice activity status to client"""
         try:
@@ -204,39 +216,39 @@ class AudioSession:
                 "timestamp": datetime.now().isoformat()
             }
             await self.websocket.send_text(json.dumps(message))
-            
+
         except Exception as e:
             logger.error(f"❌ Error sending voice activity: {e}")
-    
+
     async def _send_transcript(self, text: str, is_final: bool) -> None:
         """Send transcript to client and handle interview logic with response continuation"""
         try:
             current_time = datetime.now()
-            
+
             # Check if this might be a continuation of a previous response
             if (self.last_transcription_time and 
                 (current_time - self.last_transcription_time).total_seconds() < self.response_continuation_window and
                 self.accumulated_response):
-                
+
                 # This is likely a continuation - append to accumulated response
                 self.accumulated_response += " " + text
                 logger.info(f"📝 Continuing response: {text} (Full: {self.accumulated_response})")
                 self.waiting_for_continuation = True
-                
+
             else:
                 # This is a new response or the first part
                 if self.accumulated_response and self.waiting_for_continuation:
                     # Send the completed accumulated response first
                     await self._send_final_response(self.accumulated_response)
-                
+
                 # Start new response
                 self.accumulated_response = text
                 logger.info(f"📝 New response started: {text}")
                 self.waiting_for_continuation = False
-            
+
             # Store timing
             self.last_transcription_time = current_time
-            
+
             # Send transcript to client (always send the accumulated version)
             message = {
                 "type": "transcript",
@@ -246,7 +258,7 @@ class AudioSession:
                 "timestamp": current_time.isoformat()
             }
             await self.websocket.send_text(json.dumps(message))
-            
+
             # Handle interview logic if interview has started and this seems like a complete response
             if self.interview_started and is_final and not self.waiting_for_continuation:
                 # Wait a bit to see if there's a continuation
@@ -254,10 +266,10 @@ class AudioSession:
                 if not self.waiting_for_continuation:
                     await self._send_final_response(self.accumulated_response)
                     self.accumulated_response = ""  # Reset for next response
-            
+
         except Exception as e:
             logger.error(f"❌ Error sending transcript: {e}")
-    
+
     async def _send_final_response(self, complete_response: str) -> None:
         """Send a completed response to the interview handler"""
         try:
@@ -266,25 +278,25 @@ class AudioSession:
                 logger.info(f"📋 Processed complete response: {complete_response}")
         except Exception as e:
             logger.error(f"❌ Error processing final response: {e}")
-    
+
     async def start_interview(self, user_data: Dict, interview_type: str = "general") -> None:
         """Start the interview process"""
         try:
             # Initialize interview session
             self.interview_session.start_interview(user_data, interview_type)
             self.interview_started = True
-            
+
             # Generate first question
             first_question = await gemini_service.generate_question(
                 interview_type, 0, [], user_data
             )
-            
+
             # Personalize greeting with name
             if user_data.get('firstName') and first_question:
                 first_question = f"Hi {user_data['firstName']}, {first_question}"
-            
+
             question_number = self.interview_session.add_question(first_question)
-            
+
             # Send interview started message
             await self.websocket.send_text(json.dumps({
                 "type": "interview_started",
@@ -294,30 +306,44 @@ class AudioSession:
                 "totalQuestions": self.interview_session.total_questions,
                 "timestamp": datetime.now().isoformat()
             }))
-            
+
             logger.info(f"Interview started for session: {self.session_id}")
-            
+
         except Exception as e:
             logger.error(f"Error starting interview: {e}")
             await self._send_error("Failed to start interview")
-    
+
     async def _handle_user_response(self, response_text: str) -> None:
         """Handle user response and generate next question or end interview"""
         try:
             current_q_num = len(self.interview_session.questions)
-            
-            # Add user response
-            self.interview_session.add_user_response(response_text, current_q_num)
-            
+
+            # Capture audio data for this response
+            audio_data = None
+            if len(self.current_response_audio) > 0:
+                audio_data = bytes(self.current_response_audio)
+                self.response_audio_chunks.append(audio_data)
+                logger.info(
+                    f"🎵 Captured {len(audio_data)} bytes of audio for response {current_q_num}"
+                )
+
+                # Reset for next response
+                self.current_response_audio.clear()
+
+            # Add user response with audio data
+            self.interview_session.add_user_response(
+                response_text, current_q_num, audio_data
+            )
+
             # Enhanced caregiver scoring
             if self.interview_session.interview_type == 'home_care':
                 await self._score_caregiver_response(response_text, current_q_num)
-            
+
             # Check if interview should continue
             if current_q_num >= self.interview_session.total_questions:
                 await self._end_interview()
                 return
-            
+
             # Generate next question
             history = self._build_conversation_history()
             next_question = await gemini_service.generate_question(
@@ -326,12 +352,12 @@ class AudioSession:
                 history,
                 self.interview_session.user_data.__dict__ if self.interview_session.user_data else None
             )
-            
+
             if not next_question:
                 next_question = "Thanks for that response. Could you tell me more about your experience?"
-            
+
             question_number = self.interview_session.add_question(next_question)
-            
+
             # Send next question
             await self.websocket.send_text(json.dumps({
                 "type": "response_analyzed",
@@ -341,19 +367,19 @@ class AudioSession:
                 "totalQuestions": self.interview_session.total_questions,
                 "timestamp": datetime.now().isoformat()
             }))
-            
+
             logger.info(f"Next question sent for session: {self.session_id}")
-            
+
         except Exception as e:
             logger.error(f"Error handling user response: {e}")
             await self._send_error("Failed to process response")
-    
+
     async def _score_caregiver_response(self, response: str, question_number: int) -> None:
         """Score caregiver response using keyword analysis"""
         try:
             txt = response.lower()
             delta = 0
-            
+
             # Scoring patterns (same as Node.js version)
             patterns = {
                 'empathy': (r'(empathy|empathetic|understand|understanding|compassion|compassionate|feel|feeling|emotional|emotions)', 3),
@@ -368,30 +394,30 @@ class AudioSession:
                 'negative': (r'(angry|hate|can\'t|won\'t|never|rude|unsafe|ignore|delay|lazy|argue|frustrated|annoyed|impatient)', -3),
                 'concerns': (r'(difficult|hard|struggle|struggling|stress|stressed|overwhelmed|tired|exhausted)', -1)
             }
-            
+
             breakdown = {}
             for category, (pattern, weight) in patterns.items():
                 matches = len(re.findall(pattern, txt, re.IGNORECASE))
                 breakdown[category] = matches
                 delta += matches * weight
-            
+
             # Update session scoring
             self.interview_session.metadata["score"] = self.interview_session.metadata.get("score", 0) + delta
             self.interview_session.metadata["scoredResponses"] = self.interview_session.metadata.get("scoredResponses", 0) + 1
-            
+
             # Store detailed breakdown
             if "scoringBreakdown" not in self.interview_session.metadata:
                 self.interview_session.metadata["scoringBreakdown"] = []
-            
+
             self.interview_session.metadata["scoringBreakdown"].append({
                 "questionNumber": question_number,
                 "delta": delta,
                 "breakdown": breakdown
             })
-            
+
         except Exception as e:
             logger.error(f"Error scoring caregiver response: {e}")
-    
+
     async def _end_interview(self) -> None:
         """End the interview and generate final evaluation"""
         try:
@@ -401,36 +427,66 @@ class AudioSession:
                 f"Q{t['questionNumber']}: {t['question']}\nA{t['questionNumber']}: {t['userResponse']}\n"
                 for t in transcript
             ])
-            
+
             # Generate AI summary
             final_feedback = await gemini_service.generate_transcript_summary(
                 transcript_text,
                 self.interview_session.interview_type,
                 self.interview_session.user_data.__dict__ if self.interview_session.user_data else None
             )
-            
+
             # Generate caregiver evaluation if applicable
             caregiver_evaluation = None
             if self.interview_session.interview_type == 'home_care':
                 try:
+                    # Prepare interview data for evaluation with audio
+                    responses_with_audio = []
+                    for response in self.interview_session.user_responses:
+                        response_dict = {
+                            "response": response.response,
+                            "questionNumber": response.questionNumber,
+                            "timestamp": response.timestamp.isoformat(),
+                            "audioData": response.audioData,
+                            "audioMime": response.audioMime,
+                        }
+                        responses_with_audio.append(response_dict)
+
                     interview_data = {
-                        'responses': [{'response': r.response} for r in self.interview_session.user_responses],
-                        'transcript': transcript,
-                        'userData': self.interview_session.user_data.__dict__ if self.interview_session.user_data else {},
-                        'scoringBreakdown': self.interview_session.metadata.get('scoringBreakdown', []),
-                        'interviewDuration': self.interview_session.get_time_elapsed()
+                        "transcript": transcript_text,
+                        "userData": (
+                            self.interview_session.user_data.__dict__
+                            if self.interview_session.user_data
+                            else {}
+                        ),
+                        "sessionId": self.session_id,
+                        "responses": responses_with_audio,
+                        "audioData": self.response_audio_chunks,  # List of audio chunks
                     }
-                    
+
+                    # Get simple evaluation from Gemini
                     caregiver_evaluation = await caregiver_evaluation_service.evaluate_candidate(interview_data)
-                    logger.info(f"🎯 Caregiver evaluation completed - Score: {caregiver_evaluation.get('overallScore')}")
+                    logger.info(
+                        f"🎯 Simple evaluation completed - Overall Score: {caregiver_evaluation.get('overallScore')}"
+                    )
+
+                    # Save evaluation as JSON file
+                    try:
+                        json_path = await file_generator.save_evaluation_json(
+                            self.session_id, caregiver_evaluation
+                        )
+                        logger.info(f"💾 Evaluation JSON saved: {json_path}")
+                    except Exception as json_error:
+                        logger.error(f"❌ Failed to save evaluation JSON: {json_error}")
+
                 except Exception as eval_error:
-                    logger.error(f"❌ Caregiver evaluation failed: {eval_error}")
-            
+                    logger.error(f"❌ Evaluation failed: {eval_error}")
+                    caregiver_evaluation = None
+
             # Complete interview session
             self.interview_session.complete_interview(final_feedback)
             if caregiver_evaluation:
                 self.interview_session.caregiver_evaluation = caregiver_evaluation
-            
+
             # Generate output files
             try:
                 await file_generator.generate_interview_files(
@@ -442,7 +498,7 @@ class AudioSession:
                 )
             except Exception as file_error:
                 logger.error(f"Failed to generate output files: {file_error}")
-            
+
             # Send completion message
             await self.websocket.send_text(json.dumps({
                 "type": "interview_completed",
@@ -450,29 +506,29 @@ class AudioSession:
                 "message": "Thank you for completing the interview. We'll be in touch soon!",
                 "timestamp": datetime.now().isoformat()
             }))
-            
+
             logger.info(f"Interview completed for session: {self.session_id}")
-            
+
         except Exception as e:
             logger.error(f"Error ending interview: {e}")
             await self._send_error("Failed to complete interview")
-    
+
     def _build_conversation_history(self) -> List[Dict]:
         """Build conversation history for AI context"""
         history = []
-        
+
         questions_dict = {q.questionNumber: q.question for q in self.interview_session.questions}
         responses_dict = {r.questionNumber: r.response for r in self.interview_session.user_responses}
-        
+
         for i in range(1, len(self.interview_session.questions) + 1):
             if i in questions_dict and i in responses_dict:
                 history.append({
                     "question": questions_dict[i],
                     "response": responses_dict[i]
                 })
-        
+
         return history
-    
+
     async def _send_error(self, message: str) -> None:
         """Send error message to client"""
         try:

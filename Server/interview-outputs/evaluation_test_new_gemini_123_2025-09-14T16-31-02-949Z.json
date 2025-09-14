@@ -1,0 +1,33 @@
+{
+  "evaluationId": "eval_test_new_gemini_123_20250914_163102",
+  "timestamp": "2025-09-14T16:31:02.949846",
+  "sessionId": "test_new_gemini_123",
+  "candidateInfo": {
+    "firstName": "Maria",
+    "lastName": "Garcia",
+    "email": "maria.garcia@email.com",
+    "phone": "+1234567890",
+    "caregivingExperience": true,
+    "hasPerId": true,
+    "driversLicense": true,
+    "autoInsurance": true,
+    "availability": [
+      "Morning",
+      "Afternoon"
+    ],
+    "weeklyHours": 35,
+    "languages": [
+      "English",
+      "Spanish"
+    ]
+  },
+  "transcript": "\n        Interviewer: Have you ever worked as a caregiver?\n        Candidate: Yes, I have 2 years of experience working with elderly patients at a nursing home. I helped with daily activities like bathing, feeding, and medication reminders. I really enjoy helping people and I'm very patient with seniors who need extra time.\n        \n        Interviewer: Why do you want to be a caregiver?\n        Candidate: I'm passionate about making a difference in people's lives. My grandmother needed care when I was younger, and I saw how important it was to have someone who truly cared. I want to provide that same level of compassion and support to others.\n        ",
+  "scores": {
+    "Experience & Skills": 7.5,
+    "Motivation": 7.5,
+    "Punctuality": 2.5,
+    "Compassion and Empathy": 10.0,
+    "Communication": 0.0
+  },
+  "overallScore": 5.5
+}

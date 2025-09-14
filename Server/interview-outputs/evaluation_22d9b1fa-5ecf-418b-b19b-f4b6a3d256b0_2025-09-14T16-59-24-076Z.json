@@ -1,0 +1,33 @@
+{
+  "evaluationId": "eval_22d9b1fa-5ecf-418b-b19b-f4b6a3d256b0_20250914_165924",
+  "timestamp": "2025-09-14T16:59:24.075765",
+  "sessionId": "22d9b1fa-5ecf-418b-b19b-f4b6a3d256b0",
+  "candidateInfo": {
+    "firstName": "Yatharth",
+    "lastName": "Sameer",
+    "email": "ytharthsmr@gmail.com",
+    "phone": "+1919508640578",
+    "position": "Caregiver",
+    "hhaExperience": true,
+    "cprCertified": true,
+    "driversLicense": true,
+    "autoInsurance": true,
+    "reliableTransport": true,
+    "locationPref": "c",
+    "availability": [
+      "Morning"
+    ],
+    "weeklyHours": 30
+  },
+  "transcript": "Q1: Hi Yatharth, Yatharth, Have you ever worked as a caregiver? If so, what kinds of patients/customers did you work with and what services/activities did you perform?\nA1: Hi Yatharth. Yatharth, have you ever worked as a caregiver? If so, what kinds of patients, customers did you work with and what services, activities did you perform? I not officially. I have helped family here and there, but I'm a quick learner, so I can figure it out on the spot.\n\nQ2: Yatharth, Imagine you're finding a caregiver for a loved one. What traits or skills would be most important?\nA2: Uh I mean someone who gets things done fast and doesn't make a big deal out of small stuff\n\nQ3: Yatharth, How has your prior work or life experience helped you build the skills to be a good caregiver?\nA3: Can you repeat your question?\n\nQ4: Yatharth, Why do you want to be a caregiver? What are the most rewarding aspects of the job?\nA4: I mean uh the hours are look okay but the pay is fine but the work is work.\n\nQ5: Yatharth, Tell me about a time when being late caused problems for you or your team. What did you learn?\nA5: Pppppp\n",
+  "scores": {
+    "Experience & Skills": 5.0,
+    "Motivation": 5.0,
+    "Punctuality": 5.0,
+    "Compassion and Empathy": 5.0,
+    "Communication": 5.0
+  },
+  "overallScore": 5.0,
+  "evaluationType": "multimodal",
+  "audioInsights": {}
+}
