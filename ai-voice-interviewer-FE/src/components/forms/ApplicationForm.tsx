@@ -26,6 +26,8 @@ export default function ApplicationForm() {
 
   const form = useForm<ApplicationData>({
     resolver: zodResolver(applicationSchema),
+    mode: "onChange",
+    reValidateMode: "onChange",
     defaultValues: {
       firstName: state.application?.firstName || "",
       lastName: state.application?.lastName || "",
@@ -82,7 +84,7 @@ export default function ApplicationForm() {
     }
   };
 
-  const availabilityOptions = ["Mornings", "Afternoons", "Evenings", "Overnights", "Weekends"];
+  const availabilityOptions = ["Mornings", "Afternoons", "Evenings", "Overnights", "Weekends"] as const;
 
   return (
     <motion.div
@@ -148,7 +150,7 @@ export default function ApplicationForm() {
             id="phone"
             country="US"
             value={watchedData.phone}
-            onChange={(value) => setValue("phone", value || "")}
+            onChange={(value) => setValue("phone", value || "", { shouldValidate: true, shouldDirty: true })}
             className={`PhoneInputInput ${errors.phone ? "border-destructive" : ""}`}
             inputMode="tel"
             autoComplete="tel"
@@ -164,7 +166,7 @@ export default function ApplicationForm() {
           <Label>Which position are you applying for? *</Label>
           <RadioGroup
             value={watchedData.position}
-            onValueChange={(value) => setValue("position", value as ApplicationData["position"])}
+            onValueChange={(value) => setValue("position", value as ApplicationData["position"], { shouldValidate: true, shouldDirty: true })}
             className="grid grid-cols-1 gap-3"
           >
             {["Caregiver", "Registered Nurse", "Therapist"].map((position) => (
@@ -187,7 +189,7 @@ export default function ApplicationForm() {
             <Label>Do you have experience working as a home health aide? *</Label>
             <RadioGroup
               value={watchedData.hhaExperience?.toString()}
-              onValueChange={(value) => setValue("hhaExperience", value === "true")}
+              onValueChange={(value) => setValue("hhaExperience", value === "true", { shouldValidate: true, shouldDirty: true })}
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="true" id="hha-yes" />
@@ -207,7 +209,7 @@ export default function ApplicationForm() {
             <Label>Do you have a current CPR/First aid certification? *</Label>
             <RadioGroup
               value={watchedData.cprCertified?.toString()}
-              onValueChange={(value) => setValue("cprCertified", value === "true")}
+              onValueChange={(value) => setValue("cprCertified", value === "true", { shouldValidate: true, shouldDirty: true })}
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="true" id="cpr-yes" />
@@ -227,7 +229,7 @@ export default function ApplicationForm() {
             <Label>Driver's License & ID *</Label>
             <RadioGroup
               value={watchedData.driversLicense?.toString()}
-              onValueChange={(value) => setValue("driversLicense", value === "true")}
+              onValueChange={(value) => setValue("driversLicense", value === "true", { shouldValidate: true, shouldDirty: true })}
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="true" id="license-yes" />
@@ -251,7 +253,7 @@ export default function ApplicationForm() {
             <Label>Auto Insurance *</Label>
             <RadioGroup
               value={watchedData.autoInsurance?.toString()}
-              onValueChange={(value) => setValue("autoInsurance", value === "true")}
+              onValueChange={(value) => setValue("autoInsurance", value === "true", { shouldValidate: true, shouldDirty: true })}
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="true" id="insurance-yes" />
@@ -275,7 +277,7 @@ export default function ApplicationForm() {
             <Label>Do you have reliable transportation? *</Label>
             <RadioGroup
               value={watchedData.reliableTransport?.toString()}
-              onValueChange={(value) => setValue("reliableTransport", value === "true")}
+              onValueChange={(value) => setValue("reliableTransport", value === "true", { shouldValidate: true, shouldDirty: true })}
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="true" id="transport-yes" />
@@ -314,13 +316,13 @@ export default function ApplicationForm() {
               <div key={option} className="flex items-center space-x-2">
                 <Checkbox
                   id={`availability-${option}`}
-                  checked={watchedData.availability?.includes(option as any)}
+                  checked={watchedData.availability?.includes(option)}
                   onCheckedChange={(checked) => {
-                    const current = watchedData.availability || [];
+                    const current = (watchedData.availability ?? []) as ApplicationData["availability"];
                     if (checked) {
-                      setValue("availability", [...current, option as any]);
+                      setValue("availability", [...current, option], { shouldValidate: true, shouldDirty: true });
                     } else {
-                      setValue("availability", current.filter(item => item !== option));
+                      setValue("availability", current.filter(item => item !== option), { shouldValidate: true, shouldDirty: true });
                     }
                   }}
                 />
@@ -341,7 +343,7 @@ export default function ApplicationForm() {
           <div className="space-y-4">
             <Slider
               value={[watchedData.weeklyHours]}
-              onValueChange={([value]) => setValue("weeklyHours", value)}
+              onValueChange={([value]) => setValue("weeklyHours", value, { shouldValidate: true, shouldDirty: true })}
               max={80}
               min={5}
               step={1}
@@ -355,7 +357,7 @@ export default function ApplicationForm() {
                   min={5}
                   max={80}
                   value={watchedData.weeklyHours}
-                  onChange={(e) => setValue("weeklyHours", parseInt(e.target.value) || 5)}
+                  onChange={(e) => setValue("weeklyHours", parseInt(e.target.value) || 5, { shouldValidate: true, shouldDirty: true })}
                   className="w-20 text-center"
                 />
                 <span>hours/week</span>

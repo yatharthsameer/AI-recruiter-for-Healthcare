@@ -17,11 +17,11 @@ class InterviewStatus(Enum):
 @dataclass
 class UserData:
     """User application data"""
-    firstName: str
-    lastName: str
-    email: str
-    phone: str
-    position: str
+    firstName: str = ""
+    lastName: str = ""
+    email: str = ""
+    phone: str = ""
+    position: str = ""
     hhaExperience: bool = False
     cprCertified: bool = False
     driversLicense: bool = False
@@ -45,6 +45,7 @@ class ResponseData:
     questionNumber: int
     timestamp: datetime = field(default_factory=datetime.now)
     analysis: Optional[str] = None
+    audioPath: Optional[str] = None
 
 @dataclass
 class ScoringBreakdown:
@@ -89,17 +90,35 @@ class InterviewSession:
     
     def start_interview(self, user_data: Dict, interview_type: str = "general"):
         """Start the interview with user data"""
-        self.user_data = UserData(**user_data) if isinstance(user_data, dict) else user_data
-        self.interview_type = interview_type
-        self.status = InterviewStatus.ACTIVE
-        self.start_time = datetime.now()
-        self.metadata["lastActivity"] = datetime.now()
-        
-        # Set question count based on interview type
-        if interview_type == "home_care":
-            self.total_questions = 5
-        else:
-            self.total_questions = 5
+        try:
+            print(f"DEBUG: Starting interview with user_data: {user_data}")
+            if isinstance(user_data, dict):
+                self.user_data = UserData(**user_data)
+                print(f"DEBUG: Created UserData object: {self.user_data}")
+            else:
+                self.user_data = user_data
+            
+            self.interview_type = interview_type
+            self.status = InterviewStatus.ACTIVE
+            self.start_time = datetime.now()
+            self.metadata["lastActivity"] = datetime.now()
+            
+            # Set question count based on interview type
+            if interview_type == "home_care":
+                self.total_questions = 5
+            else:
+                self.total_questions = 5
+                
+            print(f"DEBUG: Interview started successfully with user: {self.user_data.firstName} {self.user_data.lastName}")
+        except Exception as e:
+            print(f"ERROR: Failed to start interview: {e}")
+            print(f"ERROR: user_data received: {user_data}")
+            # Create empty user data as fallback
+            self.user_data = UserData()
+            self.interview_type = interview_type
+            self.status = InterviewStatus.ACTIVE
+            self.start_time = datetime.now()
+            self.metadata["lastActivity"] = datetime.now()
     
     def add_question(self, question: str) -> int:
         """Add a question to the session"""
@@ -112,14 +131,15 @@ class InterviewSession:
         self.metadata["lastActivity"] = datetime.now()
         return question_number
     
-    def add_user_response(self, response: str, question_number: int) -> bool:
+    def add_user_response(self, response: str, question_number: int, audio_path: Optional[str] = None) -> bool:
         """Add a user response"""
         if question_number <= 0 or question_number > len(self.questions):
             return False
         
         response_data = ResponseData(
             response=response,
-            questionNumber=question_number
+            questionNumber=question_number,
+            audioPath=audio_path
         )
         
         # Update existing response or add new one
@@ -207,7 +227,8 @@ class InterviewSession:
             "responsesCount": len(self.user_responses),
             "score": self.metadata.get("score", 0),
             "finalFeedback": self.final_feedback,
-            "caregiverEvaluation": self.caregiver_evaluation
+            "caregiverEvaluation": self.caregiver_evaluation,
+            "scoringBreakdown": self.metadata.get("scoringBreakdown", [])
         }
     
     def get_full_transcript(self) -> List[Dict]:
@@ -231,7 +252,8 @@ class InterviewSession:
                     "userResponse": response.response if response else "[No response recorded]",
                     "questionTimestamp": question.timestamp.isoformat() if question else None,
                     "responseTimestamp": response.timestamp.isoformat() if response else None,
-                    "analysis": response.analysis if response else None
+                    "analysis": response.analysis if response else None,
+                    "audioPath": response.audioPath if response else None
                 })
         
         return transcript

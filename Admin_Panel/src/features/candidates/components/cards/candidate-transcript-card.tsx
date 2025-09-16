@@ -1,60 +1,20 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import WaveSurfer from 'wavesurfer.js'
+import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js'
 import { Search, Download, Clock, FileText, Bot, User, TrendingUp, TrendingDown, AlertTriangle, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
-import { type Candidate, type Transcript } from '../../data/schema'
+import { type Candidate } from '../../data/schema'
 import { InterviewApiService } from '../../services/interview-api'
 
 interface CandidateTranscriptCardProps {
   candidate: Candidate
 }
 
-// Parse real transcript data from API
-const parseTranscriptData = (rawTranscript: any) => {
-  if (!rawTranscript || !rawTranscript.questions || !rawTranscript.responses) {
-    return []
-  }
-
-  const entries = []
-  
-  // Combine questions and responses
-  for (let i = 0; i < rawTranscript.questions.length; i++) {
-    const question = rawTranscript.questions[i]
-    const response = rawTranscript.responses[i]
-    
-    // Add question entry
-    entries.push({
-      type: 'question' as const,
-      speaker: 'ai' as const,
-      content: question.question,
-      timestamp: new Date(question.timestamp).toLocaleTimeString(),
-      questionNumber: question.questionNumber,
-    })
-    
-    // Add response entry if exists
-    if (response && response.response) {
-      entries.push({
-        type: 'answer' as const,
-        speaker: 'candidate' as const,
-        content: response.response,
-        timestamp: new Date(response.timestamp).toLocaleTimeString(),
-        duration: response.duration || 0,
-        questionNumber: response.questionNumber,
-        analysis: response.analysis ? {
-          sentiment: response.analysis.sentiment || 'neutral',
-          keyTerms: response.analysis.keyTerms || [],
-          scoreImpact: response.analysis.scoreImpact || {},
-          flags: response.analysis.flags || [],
-        } : undefined,
-      })
-    }
-  }
-  
-  return entries
-}
+// Note: The InterviewApiService already transforms transcript to entries[]
 
 // Fallback sample data if API fails
 const getSampleTranscript = (candidate: Candidate) => [
@@ -125,9 +85,172 @@ const getSampleTranscript = (candidate: Candidate) => [
 
 export function CandidateTranscriptCard({ candidate }: CandidateTranscriptCardProps) {
   const [searchTerm, setSearchTerm] = useState('')
-  const [transcript, setTranscript] = useState<any[]>([])
+  type Entry = {
+    type: 'question' | 'answer'
+    speaker: 'ai' | 'candidate'
+    content: string
+    timestamp: string
+    duration?: number
+    questionNumber?: number
+    analysis?: {
+      sentiment: string
+      keyTerms: string[]
+      scoreImpact: Record<string, number>
+      flags?: string[]
+    }
+    audioUrl?: string
+  }
+  const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [fullAudio, setFullAudio] = useState<{ url: string; segments: { questionNumber: number; startMs: number; endMs: number }[] } | null>(null)
+  const [compSegments, setCompSegments] = useState<Record<string, { questionNumber: number; startMs: number; endMs: number; weight: number }[]> | null>(null)
+  const [activeSegmentQ, setActiveSegmentQ] = useState<number | null>(null)
+  const [_activeCompetency, setActiveCompetency] = useState<string | null>(null)
+  const visualizerRef = useRef<HTMLDivElement | null>(null)
+  const playerRef = useRef<HTMLAudioElement | null>(null)
+  const waveRef = useRef<WaveSurfer | null>(null)
+  const regionsPluginRef = useRef<{ addRegion: (opts: any) => void; clearRegions: () => void } | null>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+
+  // Initialize wavesurfer on mount when fullAudio is ready
+  useEffect(() => {
+    if (!visualizerRef.current || !fullAudio?.url) return
+    // Clean up existing instance
+    if (waveRef.current) {
+      waveRef.current.destroy()
+      waveRef.current = null
+    }
+    const ws = WaveSurfer.create({
+      container: visualizerRef.current,
+      waveColor: '#a3bffa',
+      progressColor: '#2563eb',
+      cursorColor: '#111827',
+      height: 80,
+      responsive: true,
+      interact: true,
+      url: fullAudio.url,
+    })
+    waveRef.current = ws
+
+    // Add base regions after waveform is ready
+    const addBaseRegions = () => {
+      try {
+        type RegionController = { addRegion: (opts: { start: number; end: number; color?: string; drag?: boolean; resize?: boolean }) => void; clearRegions: () => void }
+        const rp = ws.registerPlugin(RegionsPlugin.create()) as unknown as RegionController
+        regionsPluginRef.current = rp
+        
+        // Only base regions for all spoken answers (light gray)
+        if (rp && fullAudio?.segments?.length) {
+          fullAudio.segments.forEach(seg => {
+            const start = (seg.startMs || 0) / 1000
+            const end = (seg.endMs || 0) / 1000
+            if (end > start) {
+              rp.addRegion({ 
+                start, 
+                end, 
+                color: 'rgba(107,114,128,0.15)', 
+                drag: false, 
+                resize: false 
+              })
+            }
+          })
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.debug('Regions plugin setup failed:', err)
+      }
+    }
+
+    // Wait for waveform to be ready before adding regions
+    ws.on('ready', addBaseRegions)
+    ws.on('play', () => setIsPlaying(true))
+    ws.on('pause', () => setIsPlaying(false))
+    
+    return () => {
+      ws.destroy()
+      waveRef.current = null
+    }
+  }, [fullAudio?.url, compSegments, fullAudio?.segments])
+
+  // Function to highlight specific competency regions
+  const highlightCompetencyRegions = useCallback((competencyKey: string) => {
+    const rp = regionsPluginRef.current
+    if (!rp || !compSegments || !compSegments[competencyKey]) return
+
+    // Clear existing regions and re-add base regions
+    rp.clearRegions()
+    
+    // Re-add base regions
+    if (fullAudio?.segments?.length) {
+      fullAudio.segments.forEach(seg => {
+        const start = (seg.startMs || 0) / 1000
+        const end = (seg.endMs || 0) / 1000
+        if (end > start) {
+          rp.addRegion({ 
+            start, 
+            end, 
+            color: 'rgba(107,114,128,0.15)', 
+            drag: false, 
+            resize: false 
+          })
+        }
+      })
+    }
+
+    // Add colored regions for selected competency
+    const competencyColors: Record<string, string> = {
+      empathy_compassion: 'rgba(37, 99, 235, 0.4)',      // Blue
+      experience_commitment: 'rgba(16, 185, 129, 0.4)',   // Green
+      problem_solving: 'rgba(234, 179, 8, 0.4)',          // Yellow
+      safety_awareness: 'rgba(244, 63, 94, 0.4)',         // Red
+      communication_skills: 'rgba(139, 92, 246, 0.4)'     // Purple
+    }
+    
+    const color = competencyColors[competencyKey] || 'rgba(107, 114, 128, 0.4)'
+    compSegments[competencyKey].forEach(seg => {
+      const start = (seg.startMs || 0) / 1000
+      const end = (seg.endMs || 0) / 1000
+      if (end > start) {
+        rp.addRegion({ 
+          start, 
+          end, 
+          color, 
+          drag: false, 
+          resize: false 
+        })
+      }
+    })
+  }, [compSegments, fullAudio?.segments])
+
+  // Listen to competency selection and jump to first matching answer
+  useEffect(() => {
+    const handler = (evt: Event) => {
+      const custom = evt as CustomEvent
+      const key = (custom.detail && custom.detail.key) as string | undefined
+      if (!key) return
+      
+      // Highlight regions for this competency
+      setActiveCompetency(key)
+      highlightCompetencyRegions(key)
+      
+      const list = compSegments?.[key]
+      if (!list || list.length === 0) return
+      // Choose highest-weighted segment
+      const best = [...list].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0]
+      if (!best) return
+      setActiveSegmentQ(best.questionNumber)
+      const ws = waveRef.current
+      if (ws) {
+        ws.setTime((best.startMs || 0) / 1000)
+        ws.play()
+      }
+      const el = document.getElementById(`q-${best.questionNumber}`)
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+    window.addEventListener('competencySelect', handler as EventListener)
+    return () => window.removeEventListener('competencySelect', handler as EventListener)
+  }, [compSegments, highlightCompetencyRegions])
 
   // Fetch real transcript data
   useEffect(() => {
@@ -136,29 +259,70 @@ export function CandidateTranscriptCard({ candidate }: CandidateTranscriptCardPr
         setLoading(true)
         setError(null)
         
-        const rawTranscript = await InterviewApiService.fetchTranscript(candidate.id)
-        if (rawTranscript) {
-          // Parse the raw API data into the format expected by the UI
-          const parsedEntries = parseTranscriptData(rawTranscript)
-          setTranscript(parsedEntries)
+        type TransformedTranscript = { entries: Entry[]; fullAudio?: { url?: string; segments?: { questionNumber: number; startMs: number; endMs: number }[] }; competencySegments?: Record<string, { questionNumber: number; startMs: number; endMs: number; weight: number }[]> }
+        const transformed = await InterviewApiService.fetchTranscript(candidate.id) as unknown as TransformedTranscript | null
+        if (transformed && Array.isArray(transformed.entries)) {
+          setEntries((transformed.entries || []) as Entry[])
+          // Try to get full audio from raw endpoint as well
+          const fa = transformed.fullAudio
+          if (fa?.url) {
+            setFullAudio({ url: fa.url, segments: (fa.segments || []) })
+          }
+          const cs = transformed.competencySegments
+          if (cs && typeof cs === 'object') setCompSegments(cs)
         } else {
           // Fallback to sample data if no real transcript
-          setTranscript(getSampleTranscript(candidate))
+          // Normalize sample scoreImpact to Record<string, number>
+          const rawSample = getSampleTranscript(candidate) as unknown[]
+          const normalized: Entry[] = []
+          for (const item of rawSample) {
+            const entry = item as { type: string; analysis?: { scoreImpact?: Record<string, number | undefined>; [k: string]: unknown } } & Record<string, unknown>
+            if (entry.type === 'answer' && entry.analysis) {
+              const raw = (entry.analysis?.scoreImpact || {}) as Record<string, number | undefined>
+              const norm: Record<string, number> = {}
+              Object.entries(raw).forEach(([k, v]) => {
+                if (typeof v === 'number') norm[k] = v
+              })
+              normalized.push({
+                ...(entry as unknown as Entry),
+                analysis: {
+                  ...(entry.analysis as Record<string, unknown>),
+                  scoreImpact: norm
+                }
+              } as unknown as Entry)
+            } else {
+              normalized.push(entry as unknown as Entry)
+            }
+          }
+          // Final cast after normalization
+          setEntries(normalized as Entry[])
         }
       } catch (err) {
+        // eslint-disable-next-line no-console
         console.error('Error fetching transcript:', err)
         setError('Failed to load transcript')
-        // Fallback to sample data on error
-        setTranscript(getSampleTranscript(candidate))
+        // Fallback to sample data on error (normalize types)
+        const sample = (getSampleTranscript(candidate) as unknown[]).map((e: unknown) => {
+          const entryObj = e as { type?: string; analysis?: { scoreImpact?: Record<string, unknown> } } & Record<string, unknown>
+          if (entryObj.type === 'answer' && entryObj.analysis) {
+            const norm: Record<string, number> = {}
+            Object.entries((entryObj.analysis.scoreImpact || {}) as Record<string, unknown>).forEach(([k, v]) => {
+              if (typeof v === 'number') norm[k] = v
+            })
+            return { ...entryObj, analysis: { ...entryObj.analysis, scoreImpact: norm } }
+          }
+          return entryObj
+        }) as Entry[]
+        setEntries(sample)
       } finally {
         setLoading(false)
       }
     }
 
     fetchTranscript()
-  }, [candidate.id])
+  }, [candidate.id, candidate])
 
-  const filteredTranscript = transcript.filter(entry =>
+  const filteredTranscript = entries.filter((entry: Entry) =>
     entry.content.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
@@ -204,9 +368,19 @@ export function CandidateTranscriptCard({ candidate }: CandidateTranscriptCardPr
     return null
   }
 
+  const seekFullAudioToQuestion = (questionNumber: number) => {
+    if (!fullAudio) return
+    const seg = fullAudio.segments.find((s) => s.questionNumber === questionNumber)
+    if (!seg) return
+    setActiveSegmentQ(questionNumber)
+    // Scroll to entry
+    const el = document.getElementById(`q-${questionNumber}`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
   if (loading) {
     return (
-      <Card className="h-[600px] flex flex-col">
+      <Card className="h-full flex flex-col">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <FileText className="h-5 w-5" />
@@ -225,7 +399,7 @@ export function CandidateTranscriptCard({ candidate }: CandidateTranscriptCardPr
 
   if (error) {
     return (
-      <Card className="h-[600px] flex flex-col">
+      <Card className="h-full flex flex-col">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <FileText className="h-5 w-5" />
@@ -251,7 +425,7 @@ export function CandidateTranscriptCard({ candidate }: CandidateTranscriptCardPr
   }
 
   return (
-    <Card className="h-[600px] flex flex-col">
+    <Card className="h-full flex flex-col">
       <CardHeader className="flex-shrink-0">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center space-x-2">
@@ -270,9 +444,77 @@ export function CandidateTranscriptCard({ candidate }: CandidateTranscriptCardPr
             <Clock className="h-4 w-4" />
             <span>Duration: {formatDuration(candidate.duration)}</span>
           </div>
-          <div>Questions: {transcript.filter(e => e.type === 'question').length}</div>
+          <div>Questions: {entries.filter(e => e.type === 'question').length}</div>
           <div>Session: {candidate.id.slice(0, 8)}...</div>
         </div>
+
+        {/* Full Interview Audio */}
+        {fullAudio?.url && (
+          <div className="mt-3">
+            {/* Hidden controller audio to enable precise seeks while using visualizer for UI */}
+            <audio ref={playerRef} data-full src={fullAudio.url} style={{ display: 'none' }} />
+            {/* WaveSurfer visualizer */}
+            <div id="full-audio-player" className="w-full" ref={visualizerRef} />
+            <div className="mt-2 flex items-center gap-2">
+              <Button size="sm" onClick={() => waveRef.current?.playPause()}>
+                {isPlaying ? 'Pause' : 'Play'}
+              </Button>
+              <div className="text-xs text-muted-foreground">Full interview audio</div>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {fullAudio.segments?.map((seg) => (
+                <button
+                  key={seg.questionNumber}
+                  className={`text-xs px-2 py-1 rounded border ${activeSegmentQ === seg.questionNumber ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-900'}`}
+                  onClick={() => {
+                    setActiveSegmentQ(seg.questionNumber)
+                    const ws = waveRef.current
+                    if (ws) {
+                      ws.setTime((seg.startMs || 0) / 1000)
+                      ws.play()
+                    }
+                  }}
+                >
+                  Q{seg.questionNumber}
+                </button>
+              ))}
+            </div>
+            
+            {/* Color Legend */}
+            {/* <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Waveform Color Legend:</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(107,114,128,0.4)' }}></div>
+                  <span>All Speech</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(37, 99, 235, 0.4)' }}></div>
+                  <span>Empathy & Compassion</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(16, 185, 129, 0.4)' }}></div>
+                  <span>Experience & Commitment</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(234, 179, 8, 0.4)' }}></div>
+                  <span>Problem Solving</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(244, 63, 94, 0.4)' }}></div>
+                  <span>Safety Awareness</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(139, 92, 246, 0.4)' }}></div>
+                  <span>Communication Skills</span>
+                </div>
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                💡 Click on competency scores to highlight specific segments in the waveform
+              </div>
+            </div> */}
+          </div>
+        )}
         
         {/* Search */}
         <div className="relative">
@@ -300,7 +542,7 @@ export function CandidateTranscriptCard({ candidate }: CandidateTranscriptCardPr
                     </div>
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center space-x-2">
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-xs cursor-pointer" onClick={() => seekFullAudioToQuestion(entry.questionNumber || 0)}>
                           Q{entry.questionNumber}
                         </Badge>
                         <div className="flex items-center space-x-1 text-xs text-muted-foreground">
@@ -324,7 +566,7 @@ export function CandidateTranscriptCard({ candidate }: CandidateTranscriptCardPr
                     </div>
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center space-x-2">
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-xs cursor-pointer" onClick={() => seekFullAudioToQuestion(entry.questionNumber || 0)}>
                           A{entry.questionNumber}
                         </Badge>
                         <div className="flex items-center space-x-1 text-xs text-muted-foreground">
@@ -342,6 +584,11 @@ export function CandidateTranscriptCard({ candidate }: CandidateTranscriptCardPr
                         <p className="text-sm">
                           {highlightText(entry.content, searchTerm)}
                         </p>
+                        {entry.audioUrl && (
+                          <div className="mt-3">
+                            <audio controls src={entry.audioUrl} className="w-full" />
+                          </div>
+                        )}
                       </div>
 
                       {/* AI Analysis */}

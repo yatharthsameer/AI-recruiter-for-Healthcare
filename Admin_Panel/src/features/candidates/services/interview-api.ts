@@ -37,8 +37,8 @@ export class InterviewApiService {
       }
       
       const data = await response.json()
-      // Return the raw data since it's already in the correct format
-      return data
+      // Transform to our Transcript schema including audio URLs and analysis
+      return this.transformTranscriptData(data)
     } catch (error) {
       console.error('Error fetching transcript:', error)
       return null
@@ -122,6 +122,7 @@ export class InterviewApiService {
         
         // Add response entry if exists
         if (response) {
+          const analysis = response.analysis || undefined
           entries.push({
             type: 'answer' as const,
             speaker: 'candidate' as const,
@@ -129,18 +130,19 @@ export class InterviewApiService {
             timestamp: new Date(response.timestamp).toLocaleTimeString(),
             duration: this.calculateResponseDuration(question.timestamp, response.timestamp),
             questionNumber: response.questionNumber,
-            analysis: response.analysis ? {
+            audioUrl: response.audioUrl ? `${API_BASE_URL}${response.audioUrl}` : undefined,
+            analysis: analysis ? {
               sentiment: this.analyzeSentiment(response.response),
-              keyTerms: this.extractKeyTerms(response.response),
-              scoreImpact: response.analysis.scoreImpact || {},
-              flags: response.analysis.flags || [],
+              keyTerms: Array.isArray(analysis.keyTerms) && analysis.keyTerms.length > 0 ? analysis.keyTerms : this.extractKeyTerms(response.response),
+              scoreImpact: analysis.scoreImpact || {},
+              flags: analysis.flags || [],
             } : undefined,
           })
         }
       }
     }
     
-    return {
+    const result: any = {
       sessionId: rawData.sessionId,
       entries,
       metadata: {
@@ -155,6 +157,21 @@ export class InterviewApiService {
         },
       },
     }
+
+    // Pass through full audio if provided by backend
+    if (rawData.fullAudio?.url) {
+      result.fullAudio = {
+        url: `${API_BASE_URL}${rawData.fullAudio.url}`,
+        segments: Array.isArray(rawData.fullAudio.segments) ? rawData.fullAudio.segments : [],
+      }
+    }
+
+    // Pass through competencySegments mapping to help UI jump precisely
+    if (rawData.competencySegments && typeof rawData.competencySegments === 'object') {
+      result.competencySegments = rawData.competencySegments
+    }
+    
+    return result
   }
 
   /**

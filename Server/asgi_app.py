@@ -17,6 +17,7 @@ from collections import deque
 from starlette.applications import Starlette
 from starlette.routing import Route, WebSocketRoute
 from starlette.responses import JSONResponse
+from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocket, WebSocketDisconnect
 from starlette.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -76,6 +77,12 @@ class AudioSession:
         self.accumulated_response = ""  # Store partial responses
         self.waiting_for_continuation = False
         
+        # Accumulate raw PCM audio chunks per complete response
+        self.current_response_audio_chunks: List[bytes] = []
+        
+        # Accumulate entire session audio frames (binary PCM frames)
+        self.full_audio_frames: List[bytes] = []
+        
         logger.info(f"🎤 New audio session created: {self.session_id}")
     
     async def cleanup(self) -> None:
@@ -122,6 +129,13 @@ class AudioSession:
             # Run VAD on this frame
             is_voice = self.vad.is_speech(frame_data, SAMPLE_RATE)
             
+            # Only add speech frames to full-session recording buffer (no silence)
+            if is_voice or self.is_speaking:
+                try:
+                    self.full_audio_frames.append(frame_data)
+                except Exception as e:
+                    logger.error(f"Failed to append frame to full audio buffer: {e}")
+            
             # Update voice activity state machine
             await self._update_voice_activity(is_voice, frame_data)
             
@@ -165,6 +179,11 @@ class AudioSession:
         
         # Transcribe the accumulated audio
         if len(self.audio_buffer) > 0:
+            # Preserve audio chunk for current response continuation
+            try:
+                self.current_response_audio_chunks.append(bytes(self.audio_buffer))
+            except Exception as e:
+                logger.error(f"Failed to append audio chunk: {e}")
             await self._transcribe_buffer()
         
         # Reset for next utterance
@@ -307,7 +326,8 @@ class AudioSession:
             current_q_num = len(self.interview_session.questions)
             
             # Add user response
-            self.interview_session.add_user_response(response_text, current_q_num)
+            audio_path = await self._save_current_response_audio(current_q_num)
+            self.interview_session.add_user_response(response_text, current_q_num, audio_path)
             
             # Enhanced caregiver scoring
             if self.interview_session.interview_type == 'home_care':
@@ -347,6 +367,63 @@ class AudioSession:
         except Exception as e:
             logger.error(f"Error handling user response: {e}")
             await self._send_error("Failed to process response")
+
+    async def _save_current_response_audio(self, question_number: int) -> Optional[str]:
+        """Persist concatenated audio chunks for the completed response as a WAV file.
+        Returns a relative path under interview-outputs suitable for static serving.
+        """
+        try:
+            if not self.current_response_audio_chunks:
+                return None
+            # Concatenate PCM chunks
+            pcm_bytes = b"".join(self.current_response_audio_chunks)
+            self.current_response_audio_chunks.clear()
+            
+            # Prepare output directories
+            base_dir = os.path.join(os.getcwd(), "interview-outputs", "audio")
+            os.makedirs(base_dir, exist_ok=True)
+            
+            timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S-%f')[:-3] + 'Z'
+            filename = f"audio_{self.session_id}_q{question_number}_{timestamp}.wav"
+            filepath = os.path.join(base_dir, filename)
+            
+            # Write WAV
+            import wave
+            with wave.open(filepath, 'wb') as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)  # 16-bit PCM
+                wav_file.setframerate(SAMPLE_RATE)
+                wav_file.writeframes(pcm_bytes)
+            
+            # Return relative path from interview-outputs for static server
+            rel_path = os.path.join("audio", filename).replace("\\", "/")
+            logger.info(f"🎧 Saved response audio: {rel_path}")
+            return rel_path
+        except Exception as e:
+            logger.error(f"Failed to save response audio: {e}")
+            return None
+
+    async def _save_full_session_audio(self) -> None:
+        """Save the entire session's audio as WAV under interview-outputs/audio (speech only, no silence)."""
+        try:
+            if not self.full_audio_frames:
+                logger.warning("No full-session audio frames captured; skipping save")
+                return
+            base_dir = os.path.join(os.getcwd(), "interview-outputs", "audio")
+            os.makedirs(base_dir, exist_ok=True)
+            filename = f"full_audio_{self.session_id}.wav"
+            filepath = os.path.join(base_dir, filename)
+            import wave
+            with wave.open(filepath, 'wb') as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(SAMPLE_RATE)
+                # Concatenate all speech frames without silence gaps
+                for frame in self.full_audio_frames:
+                    wav_file.writeframes(frame)
+            logger.info(f"💾 Saved continuous speech audio (no silence): {filename}")
+        except Exception as e:
+            logger.error(f"Error saving full session audio: {e}")
     
     async def _score_caregiver_response(self, response: str, question_number: int) -> None:
         """Score caregiver response using keyword analysis"""
@@ -431,6 +508,12 @@ class AudioSession:
             if caregiver_evaluation:
                 self.interview_session.caregiver_evaluation = caregiver_evaluation
             
+            # Save full session audio BEFORE generating files so outputs reflect finalized audio
+            try:
+                await self._save_full_session_audio()
+            except Exception as full_audio_err:
+                logger.error(f"Failed to save full session audio: {full_audio_err}")
+
             # Generate output files
             try:
                 await file_generator.generate_interview_files(
@@ -452,6 +535,8 @@ class AudioSession:
             }))
             
             logger.info(f"Interview completed for session: {self.session_id}")
+            
+            # Full session audio already persisted above
             
         except Exception as e:
             logger.error(f"Error ending interview: {e}")
@@ -722,10 +807,21 @@ app = Starlette(routes=routes)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Accept-Ranges", "Content-Range", "Content-Length"]
 )
+
+# Mount static serving for generated interview outputs (audio/transcripts)
+try:
+    outputs_dir = os.path.join(os.getcwd(), "interview-outputs")
+    if not os.path.exists(outputs_dir):
+        os.makedirs(outputs_dir, exist_ok=True)
+    app.mount("/outputs", StaticFiles(directory=outputs_dir), name="outputs")
+    logger.info(f"📁 Mounted static files at /outputs from {outputs_dir}")
+except Exception as e:
+    logger.error(f"❌ Failed to mount static files: {e}")
 
 
 # Startup event

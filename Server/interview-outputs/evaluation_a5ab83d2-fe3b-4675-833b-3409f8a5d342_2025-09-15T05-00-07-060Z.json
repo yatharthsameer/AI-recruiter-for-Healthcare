@@ -1,0 +1,42 @@
+{
+  "sessionId": "a5ab83d2-fe3b-4675-833b-3409f8a5d342",
+  "timestamp": "2025-09-15T05:00:07.061058",
+  "overallScore": 58,
+  "recommendation": {
+    "recommendation": "Consider with Training",
+    "confidence": "Medium",
+    "reasoning": "Shows potential but requires targeted training before placement.",
+    "score": 58
+  },
+  "competencyScores": {
+    "empathy_compassion": 10.0,
+    "safety_awareness": 9.6,
+    "communication_skills": 0,
+    "problem_solving": 2.6,
+    "experience_commitment": 10.0
+  },
+  "strengths": [
+    "Strong Empathy Compassion (10.0/10)",
+    "Strong Safety Awareness (9.6/10)",
+    "Strong Experience Commitment (10.0/10)",
+    "Relevant HHA experience",
+    "CPR certified for emergency response"
+  ],
+  "developmentAreas": [
+    "Needs improvement in Communication Skills (0/10)",
+    "Needs improvement in Problem Solving (2.6/10)"
+  ],
+  "nextSteps": [
+    "Enroll in comprehensive HHA training program",
+    "Schedule follow-up interview after training completion",
+    "Require supervised practice before independent assignments",
+    "Provide communication skills training"
+  ],
+  "userData": {
+    "firstName": "Soumyadeep",
+    "lastName": "Pal",
+    "email": "spal@gmail.com",
+    "phone": "+17001589718",
+    "position": "Caregiver"
+  }
+}

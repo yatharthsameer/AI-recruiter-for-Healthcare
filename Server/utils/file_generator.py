@@ -5,6 +5,7 @@ Handles creation of interview transcripts and evaluation reports
 import os
 import logging
 from datetime import datetime
+import json
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -33,19 +34,18 @@ class FileGenerator:
         user_data: Dict, 
         summary: Dict
     ) -> str:
-        """Generate interview transcript file"""
+        """Generate interview transcript file in JSON format only"""
         try:
             timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S-%f')[:-3] + 'Z'
-            filename = f"transcript_{session_id}_{timestamp}.txt"
-            filepath = self.output_dir / filename
+            json_filename = f"transcript_{session_id}_{timestamp}.json"
+            json_path = self.output_dir / json_filename
             
-            content = self._build_transcript_content(session_id, transcript, user_data, summary)
+            json_payload = self._build_transcript_json(session_id, transcript, user_data, summary)
+            with open(json_path, 'w', encoding='utf-8') as jf:
+                json.dump(json_payload, jf, ensure_ascii=False, indent=2)
             
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(content)
-            
-            logger.info(f"Generated transcript file: {filename}")
-            return str(filepath)
+            logger.info(f"Generated transcript JSON file: {json_filename}")
+            return str(json_path)
             
         except Exception as e:
             logger.error(f"Failed to generate transcript file: {e}")
@@ -58,21 +58,18 @@ class FileGenerator:
         user_data: Dict, 
         caregiver_evaluation: Optional[Dict] = None
     ) -> str:
-        """Generate evaluation report file"""
+        """Generate evaluation report file in JSON format only"""
         try:
             timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S-%f')[:-3] + 'Z'
-            filename = f"evaluation_{session_id}_{timestamp}.txt"
-            filepath = self.output_dir / filename
+            json_filename = f"evaluation_{session_id}_{timestamp}.json"
+            json_path = self.output_dir / json_filename
             
-            content = self._build_evaluation_content(
-                session_id, evaluation, user_data, caregiver_evaluation
-            )
+            payload = self._build_evaluation_json(session_id, user_data, evaluation, caregiver_evaluation)
+            with open(json_path, 'w', encoding='utf-8') as jf:
+                json.dump(payload, jf, ensure_ascii=False, indent=2)
             
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(content)
-            
-            logger.info(f"Generated evaluation file: {filename}")
-            return str(filepath)
+            logger.info(f"Generated evaluation JSON file: {json_filename}")
+            return str(json_path)
             
         except Exception as e:
             logger.error(f"Failed to generate evaluation file: {e}")
@@ -165,6 +162,57 @@ Generated on: {now.strftime('%d/%m/%Y, %I:%M:%S %p')}
 """
         
         return content
+
+    def _build_transcript_json(
+        self,
+        session_id: str,
+        transcript: List[Dict],
+        user_data: Dict,
+        summary: Dict
+    ) -> Dict:
+        """Build structured JSON transcript capturing questions, responses, and audio paths."""
+        # Build questions/responses arrays
+        questions: List[Dict] = []
+        responses: List[Dict] = []
+        for item in transcript:
+            q_num = item.get('questionNumber', 0)
+            questions.append({
+                "question": item.get('question', ''),
+                "questionNumber": q_num,
+                "timestamp": item.get('questionTimestamp') or datetime.now().isoformat()
+            })
+            
+            # Build response with proper audio path and analysis
+            response_data = {
+                "response": item.get('userResponse', ''),
+                "questionNumber": q_num,
+                "timestamp": item.get('responseTimestamp') or datetime.now().isoformat(),
+                "audioPath": item.get('audioPath'),  # Relative path like "audio/filename.wav"
+            }
+            
+            # Add analysis if available (for competency scoring)
+            analysis = item.get('analysis')
+            if analysis:
+                response_data["analysis"] = {
+                    "scoreImpact": analysis.get('scoreImpact', {}),
+                    "flags": analysis.get('flags', []),
+                    "keyTerms": analysis.get('keyTerms', [])
+                }
+            
+            responses.append(response_data)
+
+        result: Dict = {
+            "sessionId": session_id,
+            "questions": questions,
+            "responses": responses,
+            "duration": summary.get('duration', 0),
+            "metadata": {
+                "startTime": summary.get('startTime'),
+                "endTime": summary.get('endTime'),
+                "userData": user_data,
+            }
+        }
+        return result
     
     def _build_evaluation_content(
         self, 
@@ -332,9 +380,48 @@ AI Interview Evaluation System
 """
         
         return content
+
+    def _build_evaluation_json(
+        self,
+        session_id: str,
+        user_data: Dict,
+        summary: Dict,
+        caregiver_evaluation: Optional[Dict] = None
+    ) -> Dict:
+        ts = datetime.now().isoformat()
+        if caregiver_evaluation:
+            data = {
+                "sessionId": session_id,
+                "timestamp": ts,
+                "overallScore": caregiver_evaluation.get("overallScore"),
+                "recommendation": caregiver_evaluation.get("recommendation"),
+                "competencyScores": caregiver_evaluation.get("competencyScores", {}),
+                "strengths": caregiver_evaluation.get("strengths", []),
+                "developmentAreas": caregiver_evaluation.get("developmentAreas", []),
+                "nextSteps": caregiver_evaluation.get("nextSteps", []),
+            }
+        else:
+            data = {
+                "sessionId": session_id,
+                "timestamp": ts,
+                "overallScore": summary.get("score"),
+                "recommendation": summary.get("recommendation"),
+                "competencyScores": summary.get("competencyScores", {}),
+                "strengths": summary.get("strengths", []),
+                "developmentAreas": summary.get("developmentAreas", []),
+                "nextSteps": summary.get("nextSteps", []),
+            }
+        data["userData"] = {
+            "firstName": user_data.get("firstName"),
+            "lastName": user_data.get("lastName"),
+            "email": user_data.get("email"),
+            "phone": user_data.get("phone"),
+            "position": user_data.get("position"),
+        }
+        return data
     
     def list_output_files(self) -> List[Dict]:
-        """List all generated output files"""
+        """List all generated output files (JSON only)"""
         try:
             files = []
             
@@ -342,7 +429,7 @@ AI Interview Evaluation System
                 return files
             
             for file_path in self.output_dir.iterdir():
-                if file_path.is_file() and file_path.suffix == '.txt':
+                if file_path.is_file() and file_path.suffix == '.json':
                     stat = file_path.stat()
                     files.append({
                         'filename': file_path.name,

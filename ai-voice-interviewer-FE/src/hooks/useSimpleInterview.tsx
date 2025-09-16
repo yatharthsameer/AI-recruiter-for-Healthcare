@@ -35,8 +35,9 @@ export function useSimpleInterview(navigate?: (path: string) => void) {
   const isRecordingRef = useRef<boolean>(false);
   const { toast } = useToast();
   
-  // Updated to use Python backend WebSocket endpoint
-  const WS_URL = 'ws://localhost:3000/ws/audio';
+  // Updated to use Python backend WebSocket endpoint (configurable). Default to IPv4 to avoid ::1 issues.
+  const WS_BASE: string = (import.meta.env.VITE_WS_BASE_URL as string | undefined) ?? 'ws://127.0.0.1:3000';
+  const WS_URL = `${WS_BASE.replace(/\/$/, '')}/ws/audio`;
   
   // Audio configuration (must match Python backend)
   const SAMPLE_RATE = 16000;
