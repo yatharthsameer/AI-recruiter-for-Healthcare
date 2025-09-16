@@ -229,8 +229,8 @@ export function InterviewSession() {
                   >
                     {isMicrophoneEnabled ? "🎤 Listening (Click to Mute)" : "🎤 Click to Unmute"}
                   </Button>
-                  <Button onClick={disconnect} variant="outline">
-                    Stop Session
+                  <Button onClick={endInterview} variant="outline" className="bg-red-50 hover:bg-red-100 dark:bg-red-900 dark:hover:bg-red-800">
+                    End Interview
                   </Button>
                 </div>
               )}

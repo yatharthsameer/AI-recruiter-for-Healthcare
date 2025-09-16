@@ -55,6 +55,12 @@ export function useWebRTCInterview(navigate?: (path: string) => void) {
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const ephemeralKeyRef = useRef<string | null>(null);
   
+  // Audio recording refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const mixerRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  
   // Configuration
   const BACKEND_URL = 'http://localhost:8000';
   const INTERVIEWER_CHARACTER = 'carebot'; // Professional healthcare interviewer character
@@ -84,6 +90,162 @@ export function useWebRTCInterview(navigate?: (path: string) => void) {
       setQuestionNumber(prev => prev + 1);
     }
   }, []);
+
+  // Setup audio recording
+  const setupAudioRecording = useCallback(async (micStream: MediaStream) => {
+    try {
+      console.log('🎙️ Setting up audio recording...');
+      
+      // Create audio context for mixing
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = audioContext;
+      
+      // Create destination for mixed audio
+      const mixer = audioContext.createMediaStreamDestination();
+      mixerRef.current = mixer;
+      
+      // Add microphone audio to mixer
+      const micSource = audioContext.createMediaStreamSource(micStream);
+      micSource.connect(mixer);
+      
+      console.log('✅ Microphone audio added to mixer');
+      
+      // Setup MediaRecorder with the mixed stream (initially just microphone)
+      const mediaRecorder = new MediaRecorder(mixer.stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
+      
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = () => {
+        console.log('🎙️ Audio recording stopped');
+      };
+      
+      console.log('✅ Audio recording setup complete (microphone ready, waiting for AI audio)');
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Error setting up audio recording:', error);
+      addTranscriptMessage('Failed to setup audio recording', 'error');
+      return false;
+    }
+  }, [addTranscriptMessage]);
+
+  // Add AI audio stream to the recording mixer
+  const addAIAudioToRecording = useCallback((aiStream: MediaStream) => {
+    try {
+      if (!audioContextRef.current || !mixerRef.current) {
+        console.warn('⚠️ Audio context or mixer not available for AI audio');
+        return;
+      }
+
+      console.log('🤖 Adding AI audio to recording mixer...');
+      
+      // Create source from AI audio stream and connect to mixer
+      const aiSource = audioContextRef.current.createMediaStreamSource(aiStream);
+      aiSource.connect(mixerRef.current);
+      
+      console.log('✅ AI audio added to recording mixer');
+      addTranscriptMessage('AI audio recording enabled', 'system');
+      
+    } catch (error) {
+      console.error('❌ Error adding AI audio to recording:', error);
+      addTranscriptMessage('Failed to add AI audio to recording', 'error');
+    }
+  }, [addTranscriptMessage]);
+
+  // Start audio recording
+  const startAudioRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'inactive') {
+      try {
+        mediaRecorderRef.current.start(1000); // Record in 1-second chunks
+        console.log('🎙️ Audio recording started');
+        addTranscriptMessage('Audio recording started', 'system');
+      } catch (error) {
+        console.error('❌ Error starting audio recording:', error);
+        addTranscriptMessage('Failed to start audio recording', 'error');
+      }
+    }
+  }, [addTranscriptMessage]);
+
+  // Stop audio recording
+  const stopAudioRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      console.log('🎙️ Audio recording stopped');
+      addTranscriptMessage('Audio recording stopped', 'system');
+    }
+  }, [addTranscriptMessage]);
+
+  // Save audio recording
+  const saveAudioRecording = useCallback(async (userData: UserData) => {
+    try {
+      if (audioChunksRef.current.length === 0) {
+        console.warn('⚠️ No audio chunks to save');
+        return null;
+      }
+
+      console.log('💾 Saving audio recording...');
+      
+      // Create audio blob
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      
+      // Create FormData for upload
+      const formData = new FormData();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const candidateName = `${userData.firstName}_${userData.lastName}`.replace(/[^a-zA-Z0-9_]/g, '');
+      const filename = `Interview_${candidateName}_${timestamp}.webm`;
+      
+      formData.append('audio', audioBlob, filename);
+      formData.append('userData', JSON.stringify(userData));
+      formData.append('sessionId', sessionId);
+      
+      // Upload to backend
+      const response = await fetch(`${BACKEND_URL}/save_interview_audio`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.status === 'success') {
+        console.log('✅ Audio recording saved:', result.filename);
+        addTranscriptMessage(`Audio recording saved: ${result.filename}`, 'system');
+        
+        toast({
+          title: "Audio Saved",
+          description: `Interview audio saved as ${result.filename}`,
+        });
+        
+        return result.filename;
+      } else {
+        throw new Error(result.message || 'Failed to save audio');
+      }
+
+    } catch (error) {
+      console.error('❌ Error saving audio recording:', error);
+      addTranscriptMessage('Failed to save audio recording', 'error');
+      
+      toast({
+        title: "Audio Save Error",
+        description: "Failed to save audio recording. Please contact support.",
+        variant: "destructive",
+      });
+      
+      return null;
+    }
+  }, [addTranscriptMessage, sessionId, toast]);
 
   // Get ephemeral key from backend
   const getEphemeralKey = useCallback(async (): Promise<string> => {
@@ -131,6 +293,9 @@ export function useWebRTCInterview(navigate?: (path: string) => void) {
         console.log('✅ Audio track added to peer connection (microphone enabled)');
       }
       
+      // Setup audio recording with microphone stream
+      await setupAudioRecording(stream);
+      
       return true;
     } catch (error) {
       console.error('❌ Error accessing microphone:', error);
@@ -160,7 +325,16 @@ export function useWebRTCInterview(navigate?: (path: string) => void) {
           const instructionsMessage = {
             type: "session.update",
             session: {
-              instructions: instructions
+              instructions: instructions,
+              input_audio_transcription: {
+                model: "whisper-1"
+              },
+              turn_detection: {
+                type: "server_vad",
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 500
+              }
             }
           };
           dataChannel.send(JSON.stringify(instructionsMessage));
@@ -173,7 +347,16 @@ export function useWebRTCInterview(navigate?: (path: string) => void) {
           const instructionsMessage = {
             type: "session.update",
             session: {
-              instructions: fallbackInstructions
+              instructions: fallbackInstructions,
+              input_audio_transcription: {
+                model: "whisper-1"
+              },
+              turn_detection: {
+                type: "server_vad",
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 500
+              }
             }
           };
           dataChannel.send(JSON.stringify(instructionsMessage));
@@ -201,7 +384,21 @@ export function useWebRTCInterview(navigate?: (path: string) => void) {
 
   // Handle WebRTC messages from OpenAI
   const handleWebRTCMessage = useCallback((data: WebRTCMessage) => {
-    console.log('📨 Received message:', data.type);
+    const messageType = data.type;
+    
+    // Only log important messages to reduce console noise
+    const importantMessages = [
+      'conversation.item.created',
+      'input_audio_buffer.speech_started',
+      'input_audio_buffer.speech_stopped',
+      'response.audio.done',
+      'error',
+      'session.updated'
+    ];
+    
+    if (importantMessages.includes(data.type)) {
+      console.log('📨 Received message:', data.type);
+    }
     
     switch (data.type) {
       case "conversation.item.created":
@@ -215,29 +412,71 @@ export function useWebRTCInterview(navigate?: (path: string) => void) {
         // User speech transcribed
         const userText = data.transcript || '';
         if (userText.trim()) {
+          console.log('👤 User said:', userText);
           addTranscriptMessage(userText, 'user');
           setState('processing');
         }
         break;
         
+      case "input_audio_buffer.transcription.completed":
+        // User input transcription completed
+        const transcribedText = data.transcript || '';
+        if (transcribedText.trim()) {
+          console.log('👤 User transcription:', transcribedText);
+          addTranscriptMessage(transcribedText, 'user');
+          setState('processing');
+        }
+        break;
+        
+      case "conversation.item.created":
+        // Item created - check if it's user input
+        if (data.item?.type === 'message' && data.item?.role === 'user') {
+          const userContent = data.item?.content?.[0]?.transcript || data.item?.content?.[0]?.text || '';
+          if (userContent.trim()) {
+            console.log('👤 User input (item.created):', userContent);
+            addTranscriptMessage(userContent, 'user');
+          }
+        }
+        break;
+        
+      case "conversation.item.input_audio_transcription.completed":
+        // Another variant of user transcription
+        const inputTranscript = data.transcript || '';
+        if (inputTranscript.trim()) {
+          console.log('👤 User input transcription:', inputTranscript);
+          addTranscriptMessage(inputTranscript, 'user');
+          setState('processing');
+        }
+        break;
+        
+      case "response.audio_transcript.delta":
+        // AI speech transcript (incremental)
+        // We can collect these to build the full transcript
+        break;
+        
+      case "response.audio_transcript.done":
+        // AI speech transcript complete
+        const aiTranscript = data.transcript || '';
+        if (aiTranscript.trim()) {
+          addTranscriptMessage(aiTranscript, 'ai');
+        }
+        break;
+        
       case "conversation.item.text.created":
-        // AI text response
+        // AI text response (fallback)
         const aiText = data.content?.text || '';
         if (aiText.trim()) {
           addTranscriptMessage(aiText, 'ai');
         }
         break;
         
-      case "conversation.item.text.delta":
-        // Incremental text updates (we can ignore these for now)
-        break;
-        
-      case "response.audio.delta":
-        // AI is speaking
+      case "output_audio_buffer.started":
+        // AI started speaking
         setState('speaking');
         break;
         
       case "response.audio.done":
+      case "output_audio_buffer.stopped":
         // AI finished speaking
         setState('listening');
         break;
@@ -249,6 +488,21 @@ export function useWebRTCInterview(navigate?: (path: string) => void) {
         
       case "input_audio_buffer.speech_stopped":
         // User stopped speaking
+        setState('processing');
+        break;
+        
+      case "input_audio_buffer.committed":
+        // User audio committed for processing
+        setState('processing');
+        break;
+        
+      case "response.created":
+        // AI response being generated
+        setState('processing');
+        break;
+        
+      case "response.done":
+        // AI response complete
         setState('listening');
         break;
         
@@ -265,8 +519,23 @@ export function useWebRTCInterview(navigate?: (path: string) => void) {
         setState('error');
         break;
         
+      // Silently handle common messages that don't need logging
+      case "rate_limits.updated":
+      case "response.output_item.added":
+      case "response.output_item.done":
+      case "response.content_part.added":
+      case "response.content_part.done":
+      case "conversation.item.truncated":
+      case "output_audio_buffer.cleared":
+        // These are normal operational messages - no action needed
+        break;
+        
       default:
-        console.log('ℹ️ Unhandled message type:', data.type);
+        // Only log truly unknown message types
+        if (!data.type.includes('audio_transcript.delta') && 
+            !data.type.includes('audio.delta')) {
+          console.log('ℹ️ Unknown message type:', data.type);
+        }
     }
   }, [addTranscriptMessage]);
 
@@ -332,9 +601,16 @@ Keep responses brief, warm, and professional. This is a voice conversation for h
       
       // Setup audio playback
       peerConnectionRef.current.ontrack = (event) => {
-        console.log('🎵 Received audio track from OpenAI');
+        console.log('🎵 Received audio track from OpenAI:', event.track.kind);
         if (audioPlayerRef.current) {
           audioPlayerRef.current.srcObject = event.streams[0];
+          console.log('🔊 AI audio connected to player');
+        }
+        
+        // Add AI audio stream to recording
+        if (event.streams[0] && event.track.kind === 'audio') {
+          console.log('🎙️ Adding AI audio stream to recording...');
+          addAIAudioToRecording(event.streams[0]);
         }
       };
       
@@ -418,7 +694,7 @@ Keep responses brief, warm, and professional. This is a voice conversation for h
         variant: "destructive",
       });
     }
-  }, [getEphemeralKey, setupMicrophone, setupDataChannel, addTranscriptMessage, toast]);
+  }, [getEphemeralKey, setupMicrophone, setupDataChannel, addTranscriptMessage, toast, addAIAudioToRecording]);
 
   // Start the interview
   const startInterview = useCallback((userData: UserData) => {
@@ -430,6 +706,17 @@ Keep responses brief, warm, and professional. This is a voice conversation for h
     console.log('🎬 Starting interview...');
     setState('active');
     setQuestionNumber(1);
+    
+    // Store user data for transcript generation
+    try {
+      sessionStorage.setItem('interviewUserData', JSON.stringify(userData));
+      console.log('💾 User data stored for transcript');
+    } catch (error) {
+      console.warn('Could not store user data:', error);
+    }
+    
+    // Start audio recording
+    startAudioRecording();
     
     // Automatically enable microphone when interview starts
     if (micStreamRef.current) {
@@ -467,6 +754,53 @@ Keep responses brief, warm, and professional. This is a voice conversation for h
     }
   }, [addTranscriptMessage]);
 
+  // Save transcript to backend
+  const saveTranscriptToBackend = useCallback(async (transcript: Array<{type: 'user' | 'ai' | 'system' | 'error', message: string}>, userData: UserData) => {
+    try {
+      console.log('💾 Saving transcript to backend...');
+      
+      const response = await fetch(`${BACKEND_URL}/save_interview_transcript`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          transcript: transcript,
+          userData: userData,
+          sessionId: sessionId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.status === 'success') {
+        console.log('✅ Transcript saved successfully:', result.filename);
+        addTranscriptMessage(`Interview transcript saved to server: ${result.filename}`, 'system');
+        
+        toast({
+          title: "Interview Complete",
+          description: `Transcript saved successfully as ${result.filename}`,
+        });
+      } else {
+        throw new Error(result.message || 'Failed to save transcript');
+      }
+
+    } catch (error) {
+      console.error('❌ Error saving transcript to backend:', error);
+      addTranscriptMessage('Error saving transcript to server', 'error');
+      
+      toast({
+        title: "Save Error",
+        description: "Failed to save transcript to server. Please contact support.",
+        variant: "destructive",
+      });
+    }
+  }, [addTranscriptMessage, sessionId, toast]);
+
   // End interview
   const endInterview = useCallback(() => {
     console.log('🛑 Ending interview...');
@@ -474,13 +808,49 @@ Keep responses brief, warm, and professional. This is a voice conversation for h
     
     addTranscriptMessage('Interview completed. Thank you for your time!', 'system');
     
-    // Navigate to results page after a delay
+    // Stop audio recording
+    stopAudioRecording();
+    
+    // Save transcript to backend
+    if (transcript.length > 0) {
+      // Get user data from the most recent interview session
+      const userData: UserData = {
+        firstName: sessionId.includes('_') ? 'Candidate' : 'Unknown',
+        lastName: '',
+        email: '',
+        phone: '',
+        caregivingExperience: false,
+        hasPerId: false,
+        driversLicense: false,
+        autoInsurance: false,
+        availability: [],
+        weeklyHours: 0,
+        languages: []
+      };
+      
+      // Try to get user data from transcript or session storage
+      try {
+        const storedUserData = sessionStorage.getItem('interviewUserData');
+        if (storedUserData) {
+          Object.assign(userData, JSON.parse(storedUserData));
+        }
+      } catch (error) {
+        console.warn('Could not retrieve user data for transcript');
+      }
+      
+      saveTranscriptToBackend(transcript, userData);
+      
+      // Save audio recording
+      saveAudioRecording(userData);
+    }
+    
+    // Navigate to thank you page after a delay
     setTimeout(() => {
       if (navigate) {
-        navigate('/results');
+        navigate('/thank-you');
       }
-    }, 2000);
-  }, [navigate, addTranscriptMessage]);
+    }, 3000); // Delay to allow transcript download
+  }, [navigate, addTranscriptMessage, transcript, sessionId, saveTranscriptToBackend, stopAudioRecording, saveAudioRecording]);
 
   // Disconnect session
   const disconnect = useCallback(() => {
@@ -509,6 +879,20 @@ Keep responses brief, warm, and professional. This is a voice conversation for h
       audioPlayerRef.current.pause();
       audioPlayerRef.current.srcObject = null;
     }
+    
+    // Stop and cleanup audio recording
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    mediaRecorderRef.current = null;
+    audioChunksRef.current = [];
+    
+    // Close audio context
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    mixerRef.current = null;
     
     // Reset state
     setIsSessionActive(false);
