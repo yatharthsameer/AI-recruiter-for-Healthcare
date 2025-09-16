@@ -2,8 +2,8 @@
                     INTERVIEW EVALUATION REPORT
 ================================================================================
 
-Session ID: 1271fbf4-f874-4135-a959-a53f08982848
-Evaluation Date: 14/09/2025, 04:46:33 PM
+Session ID: ec86d73f-af9e-4406-a45a-5de701d4f5fe
+Evaluation Date: 15/09/2025, 11:32:20 PM
 Candidate: Yatharth Sameer
 Email: ytharthsmr@gmail.com
 Phone: +1919508640578
@@ -14,20 +14,18 @@ Interview Type: General
                     EVALUATION SUMMARY
 ================================================================================
 
-Overall Score: 7/100
-Duration: 120.363382 seconds
-Questions Answered: 5
+Overall Score: 74/100
+Duration: 369.822928 seconds
+Questions Answered: 11
 
 
 ================================================================================
                     DETAILED FEEDBACK
 ================================================================================
 
-Here's a summary of the interview with Yatharth for the home care position:
-
-Yatharth has informal caregiving experience.  He prioritizes efficiency and a practical approach in caregivers.  He struggled to answer questions about prior experience and the impact of lateness.  His responses raise concerns about his preparedness and communication skills.  Further assessment is needed to determine his suitability for the role.
+Yatharth, it was a pleasure speaking with you today.  Your patience with clients and willingness to help colleagues are truly commendable qualities. Thanks for taking the time to interview, please leave the call by clicking the end interview button on your screen, we will reach out to you if you are a good fit.
 
 ================================================================================
-Report Generated: 14/09/2025, 04:46:33 PM
+Report Generated: 15/09/2025, 11:32:20 PM
 AI Interview Evaluation System
 ================================================================================

@@ -80,6 +80,14 @@ class AudioSession:
         self.current_response_audio = bytearray()  # Capture audio for current response
         self.response_audio_chunks = []  # Store audio for each response
 
+        # Natural conversation tracking
+        self.conversation_history = []  # Full conversation history
+
+        # Topic coverage tracking for comprehensive evaluation
+        from services.topic_coverage_tracker import TopicCoverageTracker
+
+        self.topic_tracker = TopicCoverageTracker()
+
         logger.info(f"🎤 New audio session created: {self.session_id}")
 
     async def cleanup(self) -> None:
@@ -286,14 +294,24 @@ class AudioSession:
             self.interview_session.start_interview(user_data, interview_type)
             self.interview_started = True
 
-            # Generate first question
-            first_question = await gemini_service.generate_question(
-                interview_type, 0, [], user_data
+            # Start natural conversation
+            first_name = user_data.get("firstName", "")
+
+            # Generate natural opening question
+            first_question = await gemini_service.start_natural_interview(
+                candidate_name=first_name,
+                interview_type=interview_type,
+                user_data=user_data,
             )
 
-            # Personalize greeting with name
-            if user_data.get('firstName') and first_question:
-                first_question = f"Hi {user_data['firstName']}, {first_question}"
+            # Add to conversation history
+            self.conversation_history.append(
+                {
+                    "role": "interviewer",
+                    "content": first_question,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
 
             question_number = self.interview_session.add_question(first_question)
 
@@ -335,38 +353,80 @@ class AudioSession:
                 response_text, current_q_num, audio_data
             )
 
+            # Add candidate response to conversation history
+            self.conversation_history.append(
+                {
+                    "role": "candidate",
+                    "content": response_text,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+
+            # Analyze what topics this response might have covered
+            last_question = ""
+            if len(self.conversation_history) >= 2:
+                last_question = self.conversation_history[-2].get("content", "")
+
+            covered_topics = self.topic_tracker.analyze_response_coverage(
+                response_text, last_question
+            )
+            if covered_topics:
+                logger.info(f"📋 Response covered topics: {covered_topics}")
+
             # Enhanced caregiver scoring
             if self.interview_session.interview_type == 'home_care':
                 await self._score_caregiver_response(response_text, current_q_num)
 
-            # Check if interview should continue
-            if current_q_num >= self.interview_session.total_questions:
-                await self._end_interview()
-                return
-
-            # Generate next question
-            history = self._build_conversation_history()
-            next_question = await gemini_service.generate_question(
-                self.interview_session.interview_type,
-                current_q_num,
-                history,
-                self.interview_session.user_data.__dict__ if self.interview_session.user_data else None
+            # Check if we should end the interview (natural completion)
+            coverage_summary = self.topic_tracker.get_coverage_summary()
+            should_end = await self._should_end_interview_naturally(
+                coverage_summary, current_q_num
             )
 
-            if not next_question:
-                next_question = "Thanks for that response. Could you tell me more about your experience?"
+            if should_end:
+                # Send closing message and wait for user to click "End Interview"
+                await self._send_closing_message()
+                return
 
-            question_number = self.interview_session.add_question(next_question)
+            # Generate natural next response using Gemini
+            next_response = await gemini_service.continue_natural_interview(
+                conversation_history=self.conversation_history,
+                coverage_summary=coverage_summary,
+                interview_type=self.interview_session.interview_type,
+                user_data=(
+                    self.interview_session.user_data.__dict__
+                    if self.interview_session.user_data
+                    else None
+                ),
+            )
+
+            if not next_response:
+                next_response = "Thanks for sharing that. Could you tell me more about your experience?"
+
+            # Add interviewer response to conversation history
+            self.conversation_history.append(
+                {
+                    "role": "interviewer",
+                    "content": next_response,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+
+            question_number = self.interview_session.add_question(next_response)
 
             # Send next question
-            await self.websocket.send_text(json.dumps({
-                "type": "response_analyzed",
-                "session_id": self.session_id,
-                "nextQuestion": next_question,
-                "questionNumber": question_number,
-                "totalQuestions": self.interview_session.total_questions,
-                "timestamp": datetime.now().isoformat()
-            }))
+            await self.websocket.send_text(
+                json.dumps(
+                    {
+                        "type": "response_analyzed",
+                        "session_id": self.session_id,
+                        "nextQuestion": next_response,
+                        "questionNumber": question_number,
+                        "totalQuestions": self.interview_session.total_questions,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+            )
 
             logger.info(f"Next question sent for session: {self.session_id}")
 
@@ -417,6 +477,71 @@ class AudioSession:
 
         except Exception as e:
             logger.error(f"Error scoring caregiver response: {e}")
+
+    async def _should_end_interview_naturally(
+        self, coverage_summary: dict, current_q_num: int
+    ) -> bool:
+        """Determine if interview should end naturally based on coverage and conversation flow"""
+
+        # Always ensure we have enough conversation (minimum questions)
+        if current_q_num < 5:  # At least 5 exchanges
+            return False
+
+        # Check if all topics are covered
+        if coverage_summary["is_complete"]:
+            logger.info(f"🎯 All topics covered! Interview can end naturally.")
+            return True
+
+        # If we have a lot of questions but still missing topics, continue
+        if current_q_num < 15:  # Maximum 15 exchanges to prevent endless interviews
+            missing_count = coverage_summary["missing_count"]
+            if missing_count <= 2:  # Only 1-2 topics missing, try to wrap up soon
+                logger.info(
+                    f"📋 {missing_count} topics remaining, continuing interview"
+                )
+            return False
+
+        # Force end if we've gone too long (15+ questions)
+        logger.info(
+            f"⏰ Interview reached maximum length ({current_q_num} questions), ending"
+        )
+        return True
+
+    async def _send_closing_message(self) -> None:
+        """Send closing message and wait for user to manually end interview"""
+        try:
+            closing_message = "Thanks for taking the time to interview, please leave the call by clicking the end interview button on your screen, we will reach out to you if you are a good fit."
+
+            # Add closing message to conversation history
+            self.conversation_history.append(
+                {
+                    "role": "interviewer",
+                    "content": closing_message,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+
+            question_number = self.interview_session.add_question(closing_message)
+
+            # Send closing message
+            await self.websocket.send_text(
+                json.dumps(
+                    {
+                        "type": "interview_closing",
+                        "session_id": self.session_id,
+                        "closingMessage": closing_message,
+                        "questionNumber": question_number,
+                        "totalQuestions": self.interview_session.total_questions,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+            )
+
+            logger.info(f"Closing message sent for session: {self.session_id}")
+
+        except Exception as e:
+            logger.error(f"Error sending closing message: {e}")
+            await self._send_error("Failed to send closing message")
 
     async def _end_interview(self) -> None:
         """End the interview and generate final evaluation"""

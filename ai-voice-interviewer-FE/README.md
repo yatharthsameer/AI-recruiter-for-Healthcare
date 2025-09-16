@@ -54,14 +54,14 @@ bun install
 Create a `.env.local` file in the root directory:
 
 ```env
-# Backend API Configuration
-VITE_API_BASE_URL=http://localhost:3000
-VITE_WS_BASE_URL=ws://localhost:3000
+# Voice Chat AI Backend Configuration
+VITE_API_BASE_URL=http://localhost:8000
+VITE_WS_BASE_URL=ws://localhost:8000
 
-# Audio Configuration (must match backend)
+# Audio Configuration (matching voice-chat-ai backend)
 VITE_SAMPLE_RATE=16000
-VITE_CHUNK_MS=20
-VITE_FRAME_BYTES=640
+VITE_CHUNK_SIZE=1024
+VITE_CHANNELS=1
 
 # Application Settings
 VITE_APP_TITLE="AI Voice Interviewer"
@@ -179,7 +179,7 @@ const FRAME_BYTES = 640;    // 640 bytes per frame (320 samples × 2 bytes)
 The app communicates with the backend via WebSocket:
 
 ```typescript
-const WS_URL = 'ws://localhost:3000/ws/audio';
+const WS_URL = 'ws://localhost:8000/ws';
 
 // Message types handled:
 // - connection: Initial connection confirmation
@@ -358,7 +358,98 @@ For issues and questions:
 
 **🎉 Ready to create amazing AI interview experiences!**
 
+## 🔗 Voice Chat AI Integration
+
+This frontend has been adapted to work with the **voice-chat-ai** backend. Here's how to set it up:
+
+### Backend Setup (voice-chat-ai)
+
+1. **Navigate to voice-chat-ai directory**:
+   ```bash
+   cd ../voice-chat-ai
+   ```
+
+2. **Install Python dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Set up environment variables**:
+   Create a `.env` file in the voice-chat-ai directory with:
+   ```env
+   OPENAI_API_KEY=your_openai_api_key_here
+   ELEVENLABS_API_KEY=your_elevenlabs_api_key_here  # Optional for better TTS
+   ```
+
+4. **Start the backend server**:
+   ```bash
+   python app/main.py
+   ```
+   The server will start on `http://localhost:8000`
+
+### Frontend Configuration
+
+1. **Create `.env.local`** in the frontend root:
+   ```env
+   # Voice Chat AI Backend Configuration
+   VITE_API_BASE_URL=http://localhost:8000
+   VITE_WS_BASE_URL=ws://localhost:8000
+   
+   # Audio Configuration (matching voice-chat-ai backend)
+   VITE_SAMPLE_RATE=16000
+   VITE_CHUNK_SIZE=1024
+   VITE_CHANNELS=1
+   
+   # Application Settings
+   VITE_APP_TITLE="AI Voice Interviewer"
+   VITE_COMPANY_NAME="Your Company"
+   
+   # Debug Mode
+   VITE_DEBUG=true
+   ```
+
+2. **Start the frontend**:
+   ```bash
+   npm run dev
+   ```
+
+### Integration Features
+
+- ✅ **Real-time WebSocket communication** with voice-chat-ai backend
+- ✅ **Audio streaming** with proper sample rate (16kHz) and chunk size
+- ✅ **Professional interviewer character** hardcoded for caregiving interviews
+- ✅ **Automatic transcription** and AI response generation
+- ✅ **Voice activity detection** and state management
+- ✅ **Interview flow control** with question progression
+- ✅ **Error handling** and connection retry logic
+
+### Testing the Integration
+
+1. **Start both servers**:
+   - Backend: `python app/main.py` (port 8000)
+   - Frontend: `npm run dev` (port 5173)
+
+2. **Complete the application form** with candidate information
+
+3. **Test device setup** (camera and microphone permissions)
+
+4. **Start the interview** and verify:
+   - WebSocket connection to `ws://localhost:8000/ws`
+   - Audio streaming and transcription
+   - AI responses and question flow
+   - Interview completion and navigation
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| **Backend not starting** | Check Python dependencies and API keys |
+| **WebSocket connection fails** | Verify backend is running on port 8000 |
+| **Audio not working** | Check microphone permissions and browser compatibility |
+| **No AI responses** | Verify OpenAI API key is set correctly |
+| **Transcription issues** | Check audio quality and background noise |
+
 ## 🔗 Related Projects
 
-- **Backend**: [AI Voice Interviewer Python Backend](../ai-voice-interviewer-python-BE/README.md)
+- **Backend**: [Voice Chat AI Backend](../voice-chat-ai/README.md)
 - **Documentation**: Check the project root for additional guides and troubleshooting docs

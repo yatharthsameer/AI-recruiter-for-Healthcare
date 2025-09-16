@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useInterview } from '@/lib/store';
-import { useSimpleInterview, UserData } from '@/hooks/useSimpleInterview';
+import { useWebRTCInterview, UserData } from '@/hooks/useWebRTCInterview';
 import DeviceSettingsDialog from '@/components/interview/DeviceSettingsDialog';
 
 type Phase = 'deviceCheck' | 'interview';
@@ -47,13 +47,15 @@ export default function SimpleInterview() {
     state: interviewState,
     currentQuestion,
     questionNumber,
-    isConnected,
+    isSessionActive,
+    isMicrophoneEnabled,
+    transcript,
     connect,
     startInterview,
     endInterview,
     disconnect,
-    startListening
-  } = useSimpleInterview(navigate);
+    toggleMicrophone
+  } = useWebRTCInterview(navigate);
 
   // Check if application is complete
   useEffect(() => {
@@ -85,27 +87,26 @@ export default function SimpleInterview() {
   }, []);
 
   const handleBeginInterview = useCallback(() => {
-    if (!appState.application || !isConnected) return;
+    if (!appState.application || !isSessionActive) return;
     
     const userData: UserData = {
       firstName: appState.application.firstName || '',
       lastName: appState.application.lastName || '',
       email: appState.application.email || '',
       phone: appState.application.phone || '',
-      position: appState.application.position || '',
-      // Enhanced application data
-      hhaExperience: appState.application.hhaExperience || false,
-      cprCertified: appState.application.cprCertified || false,
+      caregivingExperience: appState.application.caregivingExperience || false,
+      hasPerId: appState.application.hasPerId || false,
+      perId: appState.application.perId || '',
+      ssn: appState.application.ssn || '',
       driversLicense: appState.application.driversLicense || false,
       autoInsurance: appState.application.autoInsurance || false,
-      reliableTransport: appState.application.reliableTransport || false,
-      locationPref: appState.application.locationPref || '',
       availability: appState.application.availability || [],
-      weeklyHours: appState.application.weeklyHours || 30
+      weeklyHours: appState.application.weeklyHours || 30,
+      languages: appState.application.languages || []
     };
     
-    startInterview(userData, 'home_care');
-  }, [appState.application, isConnected, startInterview]);
+    startInterview(userData);
+  }, [appState.application, isSessionActive, startInterview]);
 
   // Connect WebSocket when moving to interview phase
   useEffect(() => {
@@ -117,11 +118,11 @@ export default function SimpleInterview() {
 
   // Auto-start interview when connected and in interview phase
   useEffect(() => {
-    if (phase === 'interview' && isConnected && interviewState === 'ready' && appState.application) {
+    if (phase === 'interview' && isSessionActive && interviewState === 'ready' && appState.application) {
       // Automatically start the interview
       handleBeginInterview();
     }
-  }, [phase, isConnected, interviewState, appState.application, handleBeginInterview]);
+  }, [phase, isSessionActive, interviewState, appState.application, handleBeginInterview]);
 
   // Ensure video element gets the stream when videoStream changes
   useEffect(() => {
@@ -404,11 +405,13 @@ export default function SimpleInterview() {
 
   const getStateDisplay = () => {
     switch (interviewState) {
+      case 'idle': return 'Ready to connect';
       case 'connecting': return 'Connecting...';
       case 'ready': return 'Ready to start';
-      case 'interviewing': return 'Interview in progress';
+      case 'active': return 'Interview in progress';
       case 'speaking': return 'AI is speaking...';
       case 'listening': return 'Listening...';
+      case 'processing': return 'Processing...';
       case 'completed': return 'Interview completed';
       case 'error': return 'Connection error';
       default: return 'Ready';
@@ -417,10 +420,13 @@ export default function SimpleInterview() {
 
   const getStateColor = () => {
     switch (interviewState) {
+      case 'active': return 'text-green-500';
       case 'listening': return 'text-green-500';
       case 'speaking': return 'text-blue-500';
+      case 'processing': return 'text-yellow-500';
       case 'error': return 'text-red-500';
       case 'completed': return 'text-purple-500';
+      case 'connecting': return 'text-orange-500';
       default: return 'text-gray-500';
     }
   };

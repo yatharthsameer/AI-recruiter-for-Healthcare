@@ -5,7 +5,7 @@ import { Settings, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useInterview } from "@/lib/store";
-import { useInterviewSocket, InterviewType } from "@/hooks/useInterviewSocket";
+import { useWebRTCInterview } from "@/hooks/useWebRTCInterview";
 import { AIAvatar } from "./AIAvatar";
 import { SelfView } from "./SelfView";
 import { DeviceSettingsModal } from "./DeviceSettingsModal";
@@ -33,15 +33,15 @@ export function InterviewSession() {
     sessionId,
     currentQuestion,
     questionNumber,
-    totalQuestions,
-    isConnected,
+    isSessionActive,
+    isMicrophoneEnabled,
+    transcript,
     connect,
-    retryConnection,
     startInterview,
     endInterview,
-    setAudioOutputDevice,
-    cleanup
-  } = useInterviewSocket();
+    disconnect,
+    toggleMicrophone
+  } = useWebRTCInterview();
 
   // Load saved device preferences
   useEffect(() => {
@@ -72,46 +72,42 @@ export function InterviewSession() {
 
     return () => {
       console.log('InterviewSession: Cleaning up on unmount...');
-      cleanup();
+      disconnect();
     };
-  }, [state.isApplicationComplete, state.application, navigate, toast, connect, cleanup]);
+  }, [state.isApplicationComplete, state.application, navigate, toast, connect, disconnect]);
 
-  // Auto-start interview when connected (with small delay to ensure WebSocket is ready)
+  // Auto-start interview when connected (with small delay to ensure WebRTC session is ready)
   useEffect(() => {
-    if (isConnected && state.application && interviewState === "ready") {
+    if (isSessionActive && state.application && interviewState === "ready") {
       const userData = {
         firstName: state.application.firstName || '',
         lastName: state.application.lastName || '',
         email: state.application.email || '',
         phone: state.application.phone || '',
-        position: state.application.position || '',
-        // Enhanced application data
-        hhaExperience: state.application.hhaExperience || false,
-        cprCertified: state.application.cprCertified || false,
+        caregivingExperience: state.application.caregivingExperience || false,
+        hasPerId: state.application.hasPerId || false,
+        perId: state.application.perId || '',
+        ssn: state.application.ssn || '',
         driversLicense: state.application.driversLicense || false,
         autoInsurance: state.application.autoInsurance || false,
-        reliableTransport: state.application.reliableTransport || false,
-        locationPref: state.application.locationPref || '',
         availability: state.application.availability || [],
-        weeklyHours: state.application.weeklyHours || 30
+        weeklyHours: state.application.weeklyHours || 30,
+        languages: state.application.languages || []
       };
 
-      // Hardcode interview type for caregiver-only system
-      const interviewType: InterviewType = "home_care";
-
-      // Add small delay to ensure WebSocket is fully ready
+      // Add small delay to ensure WebRTC session is fully ready
       setTimeout(() => {
-        startInterview(userData, interviewType);
+        startInterview(userData);
       }, 100);
     }
-  }, [isConnected, state.application, interviewState, startInterview]);
+  }, [isSessionActive, state.application, interviewState, startInterview]);
 
   // Update speaker device when selection changes
   useEffect(() => {
     if (selectedSpeakerId) {
-      setAudioOutputDevice(selectedSpeakerId);
+      // Audio output device setting handled by browser
     }
-  }, [selectedSpeakerId, setAudioOutputDevice]);
+  }, [selectedSpeakerId]);
 
   const handleEndInterview = () => {
     endInterview();
@@ -195,17 +191,62 @@ export function InterviewSession() {
                 <p className="text-muted-foreground max-w-md">
                   Unable to connect to the interview service. Please check your internet connection.
                 </p>
-                <Button onClick={retryConnection} variant="outline">
+                <Button onClick={connect} variant="outline">
                   Retry Connection
                 </Button>
               </motion.div>
             )}
 
+            {/* Session Status and Controls */}
+            <motion.div
+              className="text-center space-y-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="flex items-center justify-center space-x-4">
+                <span className="text-sm text-muted-foreground">Session Status:</span>
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  isSessionActive 
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                    : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+                }`}>
+                  {isSessionActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+              
+              {!isSessionActive && interviewState === 'idle' && (
+                <Button onClick={connect} className="bg-blue-600 hover:bg-blue-700">
+                  Start Session
+                </Button>
+              )}
+              
+              {isSessionActive && (
+                <div className="flex items-center justify-center space-x-3">
+                  <Button 
+                    onClick={toggleMicrophone}
+                    variant={isMicrophoneEnabled ? "default" : "outline"}
+                    className={isMicrophoneEnabled ? "bg-green-600 hover:bg-green-700" : ""}
+                  >
+                    {isMicrophoneEnabled ? "🎤 Listening (Click to Mute)" : "🎤 Click to Unmute"}
+                  </Button>
+                  <Button onClick={disconnect} variant="outline">
+                    Stop Session
+                  </Button>
+                </div>
+              )}
+              
+              {questionNumber > 0 && (
+                <div className="text-sm text-muted-foreground">
+                  Question {questionNumber}
+                </div>
+              )}
+            </motion.div>
+
             {/* AI Avatar */}
             <AIAvatar interviewState={interviewState} />
 
             {/* Current Question Display (when AI is speaking) */}
-            {currentQuestion && interviewState === "aiSpeaking" && (
+            {currentQuestion && interviewState === "speaking" && (
               <motion.div
                 className="max-w-2xl text-center"
                 initial={{ opacity: 0, y: 20 }}
@@ -213,7 +254,7 @@ export function InterviewSession() {
                 transition={{ delay: 0.3 }}
               >
                 <p className="text-muted-foreground text-sm mb-2">
-                  Question {questionNumber} of {totalQuestions}
+                  Question {questionNumber}
                 </p>
                 <p className="text-lg text-foreground leading-relaxed">
                   {currentQuestion}
@@ -221,19 +262,46 @@ export function InterviewSession() {
               </motion.div>
             )}
 
-            {/* Interview Type Badge */}
-            {state.application?.position && (
+            {/* Transcript Display */}
+            {transcript.length > 0 && (
               <motion.div
-                className="px-4 py-2 bg-muted rounded-full"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
+                className="w-full max-w-2xl bg-muted/50 rounded-lg p-4 max-h-60 overflow-y-auto"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
               >
-                <span className="text-sm font-medium text-muted-foreground">
-                  {state.application.position} Interview
-                </span>
+                <h3 className="text-sm font-medium text-muted-foreground mb-3">Conversation</h3>
+                <div className="space-y-2">
+                  {transcript.map((entry, index) => (
+                    <div key={index} className={`text-sm ${
+                      entry.type === 'user' ? 'text-blue-600 dark:text-blue-400' :
+                      entry.type === 'ai' ? 'text-green-600 dark:text-green-400' :
+                      entry.type === 'system' ? 'text-gray-500 dark:text-gray-400 italic' :
+                      'text-red-500 dark:text-red-400'
+                    }`}>
+                      <span className="font-medium">
+                        {entry.type === 'user' ? 'You: ' :
+                         entry.type === 'ai' ? 'Interviewer: ' :
+                         entry.type === 'system' ? 'System: ' :
+                         'Error: '}
+                      </span>
+                      {entry.message}
+                    </div>
+                  ))}
+                </div>
               </motion.div>
             )}
+
+            {/* Interview Type Badge */}
+            <motion.div
+              className="px-4 py-2 bg-muted rounded-full"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+            >
+              <span className="text-sm font-medium text-muted-foreground">
+                Caregiving Interview
+              </span>
+            </motion.div>
 
             {/* Settings Button */}
             <motion.div

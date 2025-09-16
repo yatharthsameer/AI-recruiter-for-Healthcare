@@ -191,6 +191,14 @@ export function useSimpleInterview(navigate?: (path: string) => void) {
         speakQuestion(message.nextQuestion);
         break;
         
+      case 'interview_closing':
+        setCurrentQuestion(message.closingMessage);
+        setQuestionNumber(message.questionNumber);
+        questionNumberRef.current = message.questionNumber;
+        setState('speaking');
+        speakQuestion(message.closingMessage);
+        break;
+        
       case 'voice_activity':
         console.log('🗣️ Voice activity:', message.speaking ? 'Speaking' : 'Silent');
         break;

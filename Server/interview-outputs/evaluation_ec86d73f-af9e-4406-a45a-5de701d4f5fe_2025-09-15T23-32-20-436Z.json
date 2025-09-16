@@ -1,0 +1,32 @@
+{
+  "evaluationId": "eval_ec86d73f-af9e-4406-a45a-5de701d4f5fe_20250915_233220",
+  "timestamp": "2025-09-15T23:32:20.436499",
+  "sessionId": "ec86d73f-af9e-4406-a45a-5de701d4f5fe",
+  "candidateInfo": {
+    "firstName": "Yatharth",
+    "lastName": "Sameer",
+    "email": "ytharthsmr@gmail.com",
+    "phone": "+1919508640578",
+    "position": "Caregiver",
+    "hhaExperience": true,
+    "cprCertified": true,
+    "driversLicense": true,
+    "autoInsurance": true,
+    "reliableTransport": true,
+    "locationPref": "c",
+    "availability": [
+      "Weekend"
+    ],
+    "weeklyHours": 30
+  },
+  "transcript": "Q1: Hi Yatharth, it's lovely to meet you!  What initially sparked your interest in becoming a caregiver?\nA1: Sure, yes. Uh I have worked about two years as a home caregiver supporting mostly seniors and a few post-operative clients. Day to day I handled bathing, dressing, light meal prep, medication reminders, uh basic mobility support and checking vitals like temperature and blood pressure. I also did light housekeeping and kept simple notes for families.\n\nQ2: That's wonderful experience, Yatharth.  What qualities do you feel are most important for a successful caregiver?\nA2: patience and reliability for sure. Uh I'd want someone who communicates clearly, follows the care plan and respects routines. Uh basic safety awareness, I mean like how to prevent falls and being calm under pressure matters too.\n\nQ3: That's a great list.  What motivates you to continue in this field?\nA3: I mean my last role taught me to stay organized and to follow instructions from nurses and families. I learned to prioritize when several tasks compete and to stay calm when a client is having a tough day. Keeping notes improved my communication.\n\nQ4: That's excellent, Yatharth.  Tell me about a time you had to adapt quickly to a changing situation.\nA4: Uh, I'm not sure what you mean by that. Can you explain?\n\nQ5: Okay, Yatharth,  think about a time your care plan changed unexpectedly.  What did you do?\nA5: Okay um I mean uh yeah I was late once because a bus broke down. My client missed a short morning walk uh that we usually do. I called ahead to let them know and apologize when I arrived. After that I started leaving earlier and checking transit updates before I left.\n\nQ6: That's good problem-solving, Yatharth.  What motivates you to be a caregiver?\nA6: Uh yeah, I like helping people uh feel safe at home. The best part is when a client is comfortable and you can tell you made their day easier. Uh like when someone says they slept better and enjoyed a meal you made.\n\nQ7: That's wonderful, Yatharth.  What skills have you developed to better assist your clients?\nA7: Um I'm not sure uh yeah I um uh I could say that uh you know uh like uh basic safety awareness I would say like how to prevent falls and being calm under pressure. These are the skills that are I think more important to me.\n\nQ8: That's great, Yatharth.  Tell me about your reputation with previous clients.\nA8: Uh I mean yeah I mean they would say if you asked them they would say that I am dependable polite and patient.\n\nQ9: Could you give me an example of a time you had to be patient with a client?\nA9: Yeah, of course. Uh, I mean, I supported a client with memory issues. Uh, the hardest part was answering the same questions repeatedly without sounding impatient. I learned to keep a steady routine and use simple, uh, reassuring answers. The meaningful part was seeing her relax and smile even more over time.\n\nQ10: That's wonderful, Yatharth.  What would you say is your greatest strength as a caregiver?\nA10: I would say uh the more important part is that I am patient and calm while handling uh these clients who need care and I'm meticulous in my approach.\n\nQ11: That's excellent, Yatharth.  Tell me about your reputation among colleagues and clients.\nA11: Uh yeah, I mean uh a coworker was overwhelmed during a busy week. I asked privately if they were okay, uh listened for a few minutes and offered to swap a task so they could finish charting. That seemed to help.\n",
+  "scores": {
+    "Experience & Skills": 7.5,
+    "Motivation": 8.0,
+    "Punctuality": 6.5,
+    "Compassion and Empathy": 9.0,
+    "Communication": 7.0
+  },
+  "overallScore": 7.6,
+  "evaluationType": "text-based"
+}

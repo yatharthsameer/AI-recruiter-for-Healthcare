@@ -68,7 +68,7 @@ class InterviewSession:
         self.questions: List[QuestionData] = []
         self.user_responses: List[ResponseData] = []
         self.current_question = 0
-        self.total_questions = 5
+        self.total_questions = 9  # Default comprehensive interview
 
         # Timing
         self.start_time: Optional[datetime] = None
@@ -99,9 +99,11 @@ class InterviewSession:
 
         # Set question count based on interview type
         if interview_type == "home_care":
-            self.total_questions = 5
+            self.total_questions = (
+                9  # 9 structured questions for comprehensive evaluation
+            )
         else:
-            self.total_questions = 5
+            self.total_questions = 9  # Standard comprehensive interview
 
     def add_question(self, question: str) -> int:
         """Add a question to the session"""
