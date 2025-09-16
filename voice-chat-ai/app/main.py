@@ -937,6 +937,187 @@ async def save_interview_audio(
             "message": f"Failed to save audio: {str(e)}"
         }
 
+@app.post("/evaluate_interview")
+async def evaluate_interview(request: Request):
+    """Evaluate interview using ChatGPT for internal assessment"""
+    try:
+        data = await request.json()
+        
+        # Extract data from request
+        transcript = data.get('transcript', [])
+        user_data = data.get('userData', {})
+        session_id = data.get('sessionId', '')
+        
+        # Build conversation for evaluation
+        conversation_text = ""
+        for entry in transcript:
+            speaker = entry.get('type', '').upper()
+            if speaker == 'USER':
+                speaker = 'CANDIDATE'
+            elif speaker == 'AI':
+                speaker = 'CAREBOT'
+            elif speaker in ['SYSTEM', 'ERROR']:
+                continue  # Skip system messages for evaluation
+            
+            message = entry.get('message', '')
+            conversation_text += f"{speaker}: {message}\n\n"
+        
+        # Create evaluation prompt
+        evaluation_prompt = f"""
+You are an expert HR evaluator for healthcare caregiving positions. Please evaluate this interview transcript and provide scores on 5 key dimensions.
+
+CANDIDATE INFORMATION:
+- Name: {user_data.get('firstName', 'Unknown')} {user_data.get('lastName', 'Candidate')}
+- Caregiving Experience: {'Yes' if user_data.get('caregivingExperience') else 'No'}
+- Weekly Hours Available: {user_data.get('weeklyHours', 'N/A')}
+
+INTERVIEW TRANSCRIPT:
+{conversation_text}
+
+EVALUATION CRITERIA:
+Rate the candidate on each dimension from 1-10 (where 10 is excellent):
+
+1. **Experience & Skills** (1-10): Relevant caregiving experience, practical skills, ability to handle caregiving tasks
+2. **Motivation** (1-10): Genuine interest in caregiving, understanding of the role, career commitment
+3. **Punctuality** (1-10): Reliability, time management, understanding of punctuality importance
+4. **Compassion & Empathy** (1-10): Emotional intelligence, caring nature, patient-centered approach
+5. **Communication** (1-10): Clear expression, listening skills, professional communication
+
+RESPONSE FORMAT (JSON only):
+{{
+  "experience_skills": {{
+    "score": [1-10],
+    "reasoning": "Brief explanation of score"
+  }},
+  "motivation": {{
+    "score": [1-10],
+    "reasoning": "Brief explanation of score"
+  }},
+  "punctuality": {{
+    "score": [1-10],
+    "reasoning": "Brief explanation of score"
+  }},
+  "compassion_empathy": {{
+    "score": [1-10],
+    "reasoning": "Brief explanation of score"
+  }},
+  "communication": {{
+    "score": [1-10],
+    "reasoning": "Brief explanation of score"
+  }},
+  "overall_score": [calculated weighted average],
+  "overall_assessment": "Brief overall assessment",
+  "recommendation": "hire|consider|reject"
+}}
+
+Provide ONLY the JSON response, no additional text.
+"""
+
+        # Get OpenAI API key
+        import os
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise Exception("OpenAI API key not configured")
+
+        # Make request to OpenAI
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {openai_api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "gpt-4",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are an expert HR evaluator for healthcare positions. Respond only with valid JSON."
+                        },
+                        {
+                            "role": "user",
+                            "content": evaluation_prompt
+                        }
+                    ],
+                    "temperature": 0.3,
+                    "max_tokens": 1000
+                }
+            ) as response:
+                if response.status != 200:
+                    raise Exception(f"OpenAI API error: {response.status}")
+                
+                result = await response.json()
+                evaluation_text = result["choices"][0]["message"]["content"]
+                
+                # Parse JSON response
+                import json
+                evaluation = json.loads(evaluation_text)
+                
+                # Calculate weighted overall score if not provided
+                if "overall_score" not in evaluation or not evaluation["overall_score"]:
+                    weights = {
+                        "experience_skills": 0.25,
+                        "motivation": 0.20,
+                        "punctuality": 0.15,
+                        "compassion_empathy": 0.25,
+                        "communication": 0.15
+                    }
+                    
+                    weighted_score = sum(
+                        evaluation[dim]["score"] * weights[dim] 
+                        for dim in weights.keys()
+                    )
+                    evaluation["overall_score"] = round(weighted_score, 1)
+                
+                # Update the existing JSON file with evaluation
+                output_dir = "interview-outputs"
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                candidate_name = f"{user_data.get('firstName', 'Unknown')}_{user_data.get('lastName', 'Candidate')}".replace(' ', '_')
+                
+                # Find the most recent JSON file for this session
+                import glob
+                json_pattern = os.path.join(output_dir, f"Interview_{candidate_name}_*.json")
+                json_files = glob.glob(json_pattern)
+                
+                if json_files:
+                    # Get the most recent file
+                    latest_json = max(json_files, key=os.path.getctime)
+                    
+                    # Read existing data
+                    with open(latest_json, 'r', encoding='utf-8') as f:
+                        existing_data = json.load(f)
+                    
+                    # Add evaluation to existing data
+                    existing_data["evaluation"] = {
+                        "timestamp": datetime.now().isoformat(),
+                        "evaluator": "ChatGPT-4",
+                        "scores": evaluation,
+                        "session_id": session_id
+                    }
+                    
+                    # Write back to file
+                    with open(latest_json, 'w', encoding='utf-8') as f:
+                        json.dump(existing_data, f, indent=2, ensure_ascii=False)
+                    
+                    logger.info(f"Interview evaluation completed for {candidate_name}")
+                    
+                    return {
+                        "status": "success",
+                        "message": "Interview evaluation completed",
+                        "evaluation": evaluation,
+                        "updated_file": latest_json
+                    }
+                else:
+                    raise Exception("Could not find transcript JSON file to update")
+        
+    except Exception as e:
+        logger.error(f"Error evaluating interview: {e}")
+        return {
+            "status": "error",
+            "message": f"Failed to evaluate interview: {str(e)}"
+        }
+
 def signal_handler(sig, frame):
     print('\nShutting down gracefully... Press Ctrl+C again to force exit')
     

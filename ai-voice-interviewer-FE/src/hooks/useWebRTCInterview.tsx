@@ -247,6 +247,45 @@ export function useWebRTCInterview(navigate?: (path: string) => void) {
     }
   }, [addTranscriptMessage, sessionId, toast]);
 
+  // Evaluate interview with ChatGPT (internal use only)
+  const evaluateInterview = useCallback(async (transcript: Array<{type: 'user' | 'ai' | 'system' | 'error', message: string}>, userData: UserData) => {
+    try {
+      console.log('🤖 Starting internal interview evaluation...');
+      
+      const response = await fetch(`${BACKEND_URL}/evaluate_interview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          transcript: transcript,
+          userData: userData,
+          sessionId: sessionId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.status === 'success') {
+        console.log('✅ Internal evaluation completed successfully');
+        addTranscriptMessage('Interview evaluation completed (internal)', 'system');
+        return result.evaluation;
+      } else {
+        throw new Error(result.message || 'Failed to evaluate interview');
+      }
+
+    } catch (error) {
+      console.error('❌ Error in internal evaluation:', error);
+      // Silent failure - don't notify user about evaluation issues
+      addTranscriptMessage('Evaluation processing in background', 'system');
+      return null;
+    }
+  }, [addTranscriptMessage, sessionId, toast]);
+  
   // Get ephemeral key from backend
   const getEphemeralKey = useCallback(async (): Promise<string> => {
     console.log('🔑 Fetching ephemeral key...');
@@ -842,6 +881,11 @@ Keep responses brief, warm, and professional. This is a voice conversation for h
       
       // Save audio recording
       saveAudioRecording(userData);
+      
+      // Evaluate interview (internal use only - runs in background)
+      setTimeout(() => {
+        evaluateInterview(transcript, userData);
+      }, 2000); // Small delay to ensure transcript is saved first
     }
     
     // Navigate to thank you page after a delay
@@ -850,7 +894,7 @@ Keep responses brief, warm, and professional. This is a voice conversation for h
         navigate('/thank-you');
       }
     }, 3000); // Delay to allow transcript download
-  }, [navigate, addTranscriptMessage, transcript, sessionId, saveTranscriptToBackend, stopAudioRecording, saveAudioRecording]);
+  }, [navigate, addTranscriptMessage, transcript, sessionId, saveTranscriptToBackend, stopAudioRecording, saveAudioRecording, evaluateInterview]);
 
   // Disconnect session
   const disconnect = useCallback(() => {
