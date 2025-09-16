@@ -1,0 +1,30 @@
+{
+  "timestamp": "2025-09-17T00:34:08.531205",
+  "session_id": "session_1758049352544",
+  "user_data": {
+    "firstName": "Yatharth",
+    "lastName": "Sameer",
+    "email": "ytharthsmr@gmail.com",
+    "phone": "+1919508640578",
+    "caregivingExperience": true,
+    "hasPerId": true,
+    "driversLicense": true,
+    "autoInsurance": true,
+    "availability": [
+      "Morning"
+    ],
+    "weeklyHours": 30,
+    "languages": [],
+    "perId": "",
+    "ssn": ""
+  },
+  "audio_filename": "Interview_Yatharth_Sameer_20250917_003408.webm",
+  "audio_filepath": "interview-outputs/Interview_Yatharth_Sameer_20250917_003408.webm",
+  "file_size": 1542913,
+  "content_type": "audio/webm",
+  "metadata": {
+    "recording_type": "interview_audio",
+    "system": "CareBot Interview System",
+    "version": "1.0"
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "timestamp": "2025-09-17T00:34:08.520371",
+  "session_id": "session_1758049352544",
+  "user_data": {
+    "firstName": "Yatharth",
+    "lastName": "Sameer",
+    "email": "ytharthsmr@gmail.com",
+    "phone": "+1919508640578",
+    "caregivingExperience": true,
+    "hasPerId": true,
+    "driversLicense": true,
+    "autoInsurance": true,
+    "availability": [
+      "Morning"
+    ],
+    "weeklyHours": 30,
+    "languages": [],
+    "perId": "",
+    "ssn": ""
+  },
+  "transcript": [
+    {
+      "type": "system",
+      "message": "Interview session connected. Microphone is ready."
+    },
+    {
+      "type": "system",
+      "message": "Audio recording started"
+    },
+    {
+      "type": "system",
+      "message": "Microphone enabled. You can start speaking."
+    },
+    {
+      "type": "system",
+      "message": "Interview started. Please introduce yourself and share what drew you to caregiving work."
+    },
+    {
+      "type": "user",
+      "message": "Hi."
+    },
+    {
+      "type": "ai",
+      "message": "Hi there, I'm CareBot. This interview takes about 12 minutes. Short examples help. Please avoid private patient details. Ready to start?"
+    },
+    {
+      "type": "user",
+      "message": "Yes."
+    },
+    {
+      "type": "ai",
+      "message": "Great! Let's begin. Question one: Have you ever worked as a caregiver? If so, what kinds of patients did you work with and what services did you perform?"
+    },
+    {
+      "type": "user",
+      "message": "I mean, not officially, but I have a health family here and there. I'm a quick learner, so I can figure it out on the spot."
+    },
+    {
+      "type": "ai",
+      "message": "Got it. Helping family shows initiative. Next question: Imagine you're finding a caregiver for a loved one. What traits or skills would be most important to you?"
+    },
+    {
+      "type": "user",
+      "message": "Someone who gets things done fast and doesn't make a big deal out of stuff"
+    },
+    {
+      "type": "ai",
+      "message": "Efficiency and calm under pressure are valuable. Last question: How has your prior work or life experience helped you build the skills to be a good caregiver?"
+    },
+    {
+      "type": "user",
+      "message": "I mean, I've not done caregiving per se, but I mean, give me a checklist and I'll tick it off."
+    },
+    {
+      "type": "ai",
+      "message": "Understood. Following a checklist effectively is a useful skill. Thanks for sharing. We'll review and update you soon. Please leave the meeting by clicking the button below."
+    }
+  ],
+  "metadata": {
+    "interview_type": "caregiving",
+    "system": "CareBot Interview System",
+    "version": "1.0",
+    "audio_filename": "Interview_Yatharth_Sameer_20250917_003408.webm"
+  }
+}
