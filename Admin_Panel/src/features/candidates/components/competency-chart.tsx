@@ -8,9 +8,11 @@ interface CompetencyChartProps {
     problem_solving: number
     experience_commitment: number
   }
+  onSelect?: (competencyKey: string) => void
+  selected?: string
 }
 
-export function CompetencyChart({ competencyScores }: CompetencyChartProps) {
+export function CompetencyChart({ competencyScores, onSelect, selected }: CompetencyChartProps) {
   const getScoreColor = (score: number) => {
     if (score >= 8) return scoreRanges.excellent
     if (score >= 6) return scoreRanges.good
@@ -62,15 +64,23 @@ export function CompetencyChart({ competencyScores }: CompetencyChartProps) {
             const barHeight = (score / maxScore) * chartHeight
             const x = index * (barWidth + spacing) + spacing / 2
             
+            const handleClick = () => {
+              if (onSelect) onSelect(key)
+              try {
+                window.dispatchEvent(new CustomEvent('competencySelect', { detail: { key } }))
+              } catch (_err) {
+                // no-op
+              }
+            }
             return (
-              <g key={key}>
+              <g key={key} onClick={handleClick} style={{ cursor: 'pointer' }}>
                 {/* Bar */}
                 <rect
                   x={x}
                   y={chartHeight - barHeight + 20}
                   width={barWidth}
                   height={barHeight}
-                  className={`${scoreColor.bgColor.replace('bg-', 'fill-')} opacity-80`}
+                  className={`${scoreColor.bgColor.replace('bg-', 'fill-')} opacity-80 ${selected === key ? 'stroke-2 stroke-black' : ''}`}
                   rx={4}
                 />
                 

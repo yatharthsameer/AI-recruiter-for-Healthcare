@@ -891,31 +891,31 @@ async def save_interview_audio(
         # Parse user data
         import json
         user_data = json.loads(userData)
-        
+
         # Create interview-outputs directory if it doesn't exist
         output_dir = "interview-outputs"
         os.makedirs(output_dir, exist_ok=True)
-        
+
         # Generate filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         candidate_name = f"{user_data.get('firstName', 'Unknown')}_{user_data.get('lastName', 'Candidate')}".replace(' ', '_')
-        
+
         # Get file extension from original filename or default to webm
         original_filename = audio.filename or "recording.webm"
         file_extension = os.path.splitext(original_filename)[1] or ".webm"
-        
+
         filename = f"Interview_{candidate_name}_{timestamp}{file_extension}"
         filepath = os.path.join(output_dir, filename)
-        
+
         # Save audio file
         with open(filepath, "wb") as f:
             content = await audio.read()
             f.write(content)
-        
+
         # Create metadata file
         metadata_filename = f"Interview_{candidate_name}_{timestamp}_audio_metadata.json"
         metadata_filepath = os.path.join(output_dir, metadata_filename)
-        
+
         metadata = {
             "timestamp": datetime.now().isoformat(),
             "session_id": sessionId,
@@ -930,10 +930,10 @@ async def save_interview_audio(
                 "version": "1.0"
             }
         }
-        
+
         with open(metadata_filepath, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=2, ensure_ascii=False)
-        
+
         return {
             "status": "success",
             "message": "Interview audio saved successfully",
@@ -942,13 +942,247 @@ async def save_interview_audio(
             "metadata_filename": metadata_filename,
             "file_size": len(content)
         }
-        
+
     except Exception as e:
         logger.error(f"Error saving interview audio: {e}")
         return {
             "status": "error",
             "message": f"Failed to save audio: {str(e)}"
         }
+
+
+@app.get("/api/interviews")
+async def get_all_interviews():
+    """Get all completed interviews for admin panel"""
+    try:
+        output_dir = "interview-outputs"
+        if not os.path.exists(output_dir):
+            return {"interviews": []}
+
+        interviews = []
+
+        # Get all JSON files (main interview files)
+        json_files = [
+            f
+            for f in os.listdir(output_dir)
+            if f.endswith(".json") and not f.endswith("_audio_metadata.json")
+        ]
+
+        for json_file in json_files:
+            try:
+                # Load main interview data
+                json_path = os.path.join(output_dir, json_file)
+                with open(json_path, "r", encoding="utf-8") as f:
+                    interview_data = json.load(f)
+
+                # Look for corresponding audio metadata file with evaluation by session_id
+                session_id = interview_data.get("session_id")
+                evaluation_data = None
+
+                if session_id:
+                    # Find metadata file with matching session_id
+                    metadata_files = [
+                        f
+                        for f in os.listdir(output_dir)
+                        if f.endswith("_audio_metadata.json")
+                    ]
+                    for metadata_file in metadata_files:
+                        try:
+                            metadata_path = os.path.join(output_dir, metadata_file)
+                            with open(metadata_path, "r", encoding="utf-8") as f:
+                                metadata = json.load(f)
+                            if metadata.get("session_id") == session_id:
+                                evaluation_data = metadata.get("evaluation")
+                                break
+                        except Exception as e:
+                            logger.error(
+                                f"Error reading metadata file {metadata_file}: {e}"
+                            )
+                            continue
+
+                # Calculate interview duration from transcript timestamps
+                duration = 0
+                transcript = interview_data.get("transcript", [])
+                if len(transcript) > 1:
+                    try:
+                        start_time = datetime.fromisoformat(
+                            transcript[0]["timestamp"].replace("Z", "+00:00")
+                        )
+                        end_time = datetime.fromisoformat(
+                            transcript[-1]["timestamp"].replace("Z", "+00:00")
+                        )
+                        duration = int((end_time - start_time).total_seconds())
+                    except:
+                        duration = 0
+
+                # Build interview summary
+                interview_summary = {
+                    "sessionId": interview_data.get("session_id", ""),
+                    "userData": interview_data.get("user_data", {}),
+                    "interviewType": interview_data.get("metadata", {}).get(
+                        "interview_type", "caregiving"
+                    ),
+                    "status": "completed",  # All saved interviews are completed
+                    "startTime": interview_data.get("timestamp", ""),
+                    "endTime": interview_data.get(
+                        "timestamp", ""
+                    ),  # Use same timestamp for now
+                    "duration": duration,
+                    "caregiverEvaluation": evaluation_data,
+                    "transcriptLength": len(transcript),
+                    "audioFilename": interview_data.get("metadata", {}).get(
+                        "audio_filename", ""
+                    ),
+                }
+
+                interviews.append(interview_summary)
+
+            except Exception as e:
+                logger.error(f"Error processing interview file {json_file}: {e}")
+                continue
+
+        # Sort by timestamp (newest first)
+        interviews.sort(key=lambda x: x.get("startTime", ""), reverse=True)
+
+        return {"interviews": interviews}
+
+    except Exception as e:
+        logger.error(f"Error fetching interviews: {e}")
+        return {"interviews": [], "error": str(e)}
+
+
+@app.get("/api/interviews/{session_id}/transcript")
+async def get_interview_transcript(session_id: str):
+    """Get specific interview transcript"""
+    try:
+        output_dir = "interview-outputs"
+
+        # Find the JSON file for this session
+        json_files = [
+            f
+            for f in os.listdir(output_dir)
+            if f.endswith(".json") and not f.endswith("_audio_metadata.json")
+        ]
+
+        for json_file in json_files:
+            json_path = os.path.join(output_dir, json_file)
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    interview_data = json.load(f)
+
+                if interview_data.get("session_id") == session_id:
+                    # Look for corresponding audio metadata file to get correct audio filename
+                    metadata_files = [
+                        f
+                        for f in os.listdir(output_dir)
+                        if f.endswith("_audio_metadata.json")
+                    ]
+                    audio_filename = None
+
+                    for metadata_file in metadata_files:
+                        try:
+                            metadata_path = os.path.join(output_dir, metadata_file)
+                            with open(metadata_path, "r", encoding="utf-8") as f:
+                                metadata = json.load(f)
+                            if metadata.get("session_id") == session_id:
+                                audio_filename = metadata.get("audio_filename")
+                                break
+                        except:
+                            continue
+
+                    # Update metadata with correct audio filename if found
+                    result_metadata = interview_data.get("metadata", {})
+                    if audio_filename:
+                        result_metadata["audio_filename"] = audio_filename
+
+                    # Return the full transcript data
+                    return {
+                        "sessionId": session_id,
+                        "transcript": interview_data.get("transcript", []),
+                        "userData": interview_data.get("user_data", {}),
+                        "metadata": result_metadata,
+                        "timestamp": interview_data.get("timestamp", ""),
+                    }
+            except Exception as e:
+                logger.error(f"Error reading transcript file {json_file}: {e}")
+                continue
+
+        return {"error": "Transcript not found", "sessionId": session_id}, 404
+
+    except Exception as e:
+        logger.error(f"Error fetching transcript for {session_id}: {e}")
+        return {"error": str(e)}, 500
+
+
+@app.get("/api/interviews/{session_id}/evaluation")
+async def get_interview_evaluation(session_id: str):
+    """Get specific interview evaluation"""
+    try:
+        output_dir = "interview-outputs"
+
+        # Find the audio metadata file for this session
+        metadata_files = [
+            f for f in os.listdir(output_dir) if f.endswith("_audio_metadata.json")
+        ]
+
+        for metadata_file in metadata_files:
+            metadata_path = os.path.join(output_dir, metadata_file)
+            try:
+                with open(metadata_path, "r", encoding="utf-8") as f:
+                    metadata = json.load(f)
+
+                if metadata.get("session_id") == session_id:
+                    evaluation = metadata.get("evaluation")
+                    if evaluation:
+                        return {
+                            "sessionId": session_id,
+                            "evaluation": evaluation,
+                            "userData": metadata.get("user_data", {}),
+                            "audioFilename": metadata.get("audio_filename", ""),
+                            "timestamp": metadata.get("timestamp", ""),
+                        }
+                    else:
+                        return {
+                            "error": "Evaluation not found for this session",
+                            "sessionId": session_id,
+                        }, 404
+            except Exception as e:
+                logger.error(f"Error reading evaluation file {metadata_file}: {e}")
+                continue
+
+        return {"error": "Evaluation not found", "sessionId": session_id}, 404
+
+    except Exception as e:
+        logger.error(f"Error fetching evaluation for {session_id}: {e}")
+        return {"error": str(e)}, 500
+
+
+@app.get("/interview-outputs/{filename}")
+async def serve_interview_file(filename: str):
+    """Serve interview audio files for admin panel"""
+    try:
+        output_dir = "interview-outputs"
+        file_path = os.path.join(output_dir, filename)
+
+        if not os.path.exists(file_path):
+            return {"error": "File not found"}, 404
+
+        # Determine media type based on file extension
+        if filename.endswith(".webm"):
+            media_type = "audio/webm"
+        elif filename.endswith(".mp3"):
+            media_type = "audio/mpeg"
+        elif filename.endswith(".wav"):
+            media_type = "audio/wav"
+        else:
+            media_type = "application/octet-stream"
+
+        return FileResponse(file_path, media_type=media_type, filename=filename)
+
+    except Exception as e:
+        logger.error(f"Error serving file {filename}: {e}")
+        return {"error": str(e)}, 500
+
 
 @app.post("/evaluate_interview")
 async def evaluate_interview(request: Request):

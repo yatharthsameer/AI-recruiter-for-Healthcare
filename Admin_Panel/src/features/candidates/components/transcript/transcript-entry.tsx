@@ -16,12 +16,15 @@ interface TranscriptEntryProps {
       scoreImpact: Record<string, number>
       flags?: string[]
     }
+    audioUrl?: string
   }
   showTimestamps: boolean
   searchTerm: string
+  selectedCompetency?: string
+  onPlayAudio?: (questionNumber?: number) => void
 }
 
-export function TranscriptEntry({ entry, showTimestamps, searchTerm }: TranscriptEntryProps) {
+export function TranscriptEntry({ entry, showTimestamps, searchTerm, selectedCompetency, onPlayAudio }: TranscriptEntryProps) {
   const highlightText = (text: string, term: string) => {
     if (!term) return text
     
@@ -62,6 +65,16 @@ export function TranscriptEntry({ entry, showTimestamps, searchTerm }: Transcrip
     return null
   }
 
+  const highlightByCompetency = (base: string) => {
+    if (!selectedCompetency || entry.type !== 'answer' || !entry.analysis) return base
+    const impactMap = entry.analysis.scoreImpact || {}
+    const value = impactMap[selectedCompetency]
+    if (!value) return base
+    // Positive -> green border, Negative -> red border
+    const border = value > 0 ? 'border-green-400 ring-1 ring-green-200' : 'border-red-400 ring-1 ring-red-200'
+    return `${base} ${border}`
+  }
+
   if (entry.type === 'question') {
     return (
       <div className="flex space-x-4">
@@ -93,8 +106,10 @@ export function TranscriptEntry({ entry, showTimestamps, searchTerm }: Transcrip
   }
 
   if (entry.type === 'answer') {
+    const containerClass = highlightByCompetency('bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border')
+
     return (
-      <div className="flex space-x-4">
+      <div className="flex space-x-4" id={`q-${entry.questionNumber}`}>
         <div className="flex-shrink-0">
           <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
             <User className="h-4 w-4 text-green-600" />
@@ -118,10 +133,20 @@ export function TranscriptEntry({ entry, showTimestamps, searchTerm }: Transcrip
             )}
           </div>
           
-          <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+          <div className={containerClass}>
             <p className="text-sm">
               {highlightText(entry.content, searchTerm)}
             </p>
+            {entry.audioUrl && (
+              <div className="mt-3">
+                <audio
+                  controls
+                  src={entry.audioUrl}
+                  onPlay={() => onPlayAudio?.(entry.questionNumber)}
+                  className="w-full"
+                />
+              </div>
+            )}
           </div>
 
           {/* AI Analysis */}
@@ -156,7 +181,7 @@ export function TranscriptEntry({ entry, showTimestamps, searchTerm }: Transcrip
                   {Object.keys(entry.analysis.scoreImpact).length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(entry.analysis.scoreImpact).map(([competency, impact]) => (
-                        <div key={competency} className="flex items-center space-x-1 text-xs">
+                        <div key={competency} className={`flex items-center space-x-1 text-xs ${selectedCompetency === competency ? 'font-bold underline' : ''}`}>
                           {getScoreImpactIcon(impact)}
                           <span className="capitalize">
                             {competency.replace('_', ' ')}: {impact > 0 ? '+' : ''}{impact}
