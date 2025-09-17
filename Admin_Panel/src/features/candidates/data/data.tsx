@@ -120,9 +120,9 @@ export const scoreRanges = {
 }
 
 export const competencyLabels = {
-  empathy_compassion: 'Empathy & Compassion',
-  safety_awareness: 'Safety Awareness',
-  communication_skills: 'Communication Skills',
-  problem_solving: 'Problem Solving',
-  experience_commitment: 'Experience & Commitment',
+  experience_skills: 'Experience & Skills',
+  motivation: 'Motivation',
+  punctuality: 'Punctuality',
+  compassion_empathy: 'Compassion & Empathy',
+  communication: 'Communication',
 }

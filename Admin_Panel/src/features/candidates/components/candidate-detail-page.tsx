@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, Download, UserCheck, UserX, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Download, UserCheck, UserX, RefreshCw, FileText, CalendarDays } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { ConfigDrawer } from '@/components/config-drawer'
@@ -24,6 +26,32 @@ export function CandidateDetailPage() {
   const { candidates, loading, error } = useCandidatesData()
   
   const candidate = candidates.find(c => c.id === candidateId)
+  const [activeTab, setActiveTab] = useState('experience')
+
+  type DocumentItem = {
+    key: string
+    label: string
+    expiry?: string | null
+  }
+
+  // Placeholder docs data; wire these to real fields when available
+  const documentItems: DocumentItem[] = [
+    { key: 'driving_license', label: 'Driving license', expiry: '2026-03-15' }, // valid
+    { key: 'auto_insurance', label: 'Auto insurance', expiry: '2025-07-31' }, // expired
+    { key: 'i9_form', label: 'I-9 form', expiry: '2025-11-01' }, // valid
+    { key: 'tb_test', label: 'TB test result', expiry: '2025-05-10' }, // expired
+  ]
+
+  const getDocStatus = (expiry?: string | null) => {
+    if (!expiry) return { text: 'Missing', color: 'border-muted text-muted-foreground', badgeVariant: 'secondary' as const, extra: '' }
+    const exp = new Date(expiry)
+    const now = new Date()
+    if (isNaN(exp.getTime())) return { text: 'Unknown', color: 'border-muted text-muted-foreground', badgeVariant: 'secondary' as const, extra: '' }
+    const expired = exp < now
+    return expired
+      ? { text: 'Expired', color: 'text-red-600 border-red-200', badgeVariant: 'outline' as const, extra: `on ${exp.toLocaleDateString()}` }
+      : { text: 'Valid', color: 'text-green-600 border-green-200', badgeVariant: 'outline' as const, extra: `until ${exp.toLocaleDateString()}` }
+  }
   
   if (loading) {
     return (
@@ -114,7 +142,7 @@ export function CandidateDetailPage() {
           <CardHeader>
             <div className="flex items-start justify-between">
               <div className="flex items-start space-x-6">
-                <Avatar className="h-20 w-20">
+                <Avatar className="h-14 w-14">
                   <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${candidate.candidateName}`} />
                   <AvatarFallback className="text-xl">
                     {getInitials(candidate.candidateName)}
@@ -166,11 +194,11 @@ export function CandidateDetailPage() {
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-foreground">
-                        {Math.round((candidate.competencyScores.empathy_compassion + 
-                                   candidate.competencyScores.safety_awareness + 
-                                   candidate.competencyScores.communication_skills + 
-                                   candidate.competencyScores.problem_solving + 
-                                   candidate.competencyScores.experience_commitment) / 5)}
+                        {Math.round((candidate.competencyScores.experience_skills + 
+                                   candidate.competencyScores.motivation + 
+                                   candidate.competencyScores.punctuality + 
+                                   candidate.competencyScores.compassion_empathy + 
+                                   candidate.competencyScores.communication) / 5)}
                       </div>
                       <p className="text-xs text-muted-foreground">Avg Competency</p>
                     </div>
@@ -218,17 +246,91 @@ export function CandidateDetailPage() {
           </CardHeader>
         </Card>
 
-        {/* Two-Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-7 gap-6">
-          {/* Left Column - Competency Only */}
-          <div className="col-span-1 lg:col-span-3 space-y-6">
-            <CandidateCompetencyCard candidate={candidate} />
+        {/* Tabs + Two-Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-7 gap-6 h-[calc(100vh-380px)]">
+          {/* Left Column */}
+          <div className={`col-span-1 ${activeTab === 'scores' ? 'lg:col-span-3' : 'lg:col-span-7'} flex flex-col h-full`}>
+            {/* Top general info card already rendered above. Now tabbed content */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full h-full flex flex-col">
+              <TabsList>
+                <TabsTrigger value="experience">Experience & Skills</TabsTrigger>
+                <TabsTrigger value="docs">
+                  <span className="flex items-center gap-1"><FileText className="h-4 w-4" /> Docs</span>
+                </TabsTrigger>
+                <TabsTrigger value="availability">
+                  <span className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Availability</span>
+                </TabsTrigger>
+                <TabsTrigger value="scores">Scores</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="experience" className="mt-4 flex-1 overflow-hidden">
+                <div className="space-y-6 h-full overflow-auto">
+                  <CandidateProfileCard candidate={candidate} />
+                  <CandidateNextStepsCard candidate={candidate} />
+                </div>
+              </TabsContent>
+
+              <TabsContent value="docs" className="mt-4 flex-1 overflow-hidden">
+                <Card className="h-full flex flex-col">
+                  <CardHeader className="flex-shrink-0">
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="h-5 w-5" /> Documents
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex-1 overflow-auto space-y-3">
+                    {documentItems.map((doc) => {
+                      const status = getDocStatus(doc.expiry)
+                      return (
+                        <div key={doc.key} className="flex items-center justify-between rounded-lg border p-3">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">{doc.label}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={status.badgeVariant} className={`text-xs ${status.color}`}>
+                              {status.text}
+                            </Badge>
+                            {status.extra && (
+                              <span className="text-xs text-muted-foreground">{status.extra}</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    <p className="text-xs text-muted-foreground">Connect these to real expiry dates to show Valid/Expired automatically.</p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="availability" className="mt-4 flex-1 overflow-hidden">
+                <Card className="h-full flex flex-col">
+                  <CardHeader className="flex-shrink-0">
+                    <CardTitle className="flex items-center gap-2">
+                      <CalendarDays className="h-5 w-5" /> Availability & Preferences
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex-1 overflow-auto space-y-2 text-sm">
+                    <div className="text-muted-foreground">Availability details not provided.</div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="scores" className="mt-4 flex-1 overflow-hidden">
+                <div className="h-full overflow-auto">
+                  <CandidateCompetencyCard candidate={candidate} />
+                </div>
+              </TabsContent>
+            </Tabs>
           </div>
-          
-          {/* Right Column - Transcript */}
-          <div className="col-span-1 lg:col-span-4">
-            <CandidateTranscriptCard candidate={candidate} />
-          </div>
+
+          {/* Right Column - Transcript (only on Scores tab) */}
+          {activeTab === 'scores' && (
+            <div className="col-span-1 lg:col-span-4 relative">
+              <div className="absolute inset-1 overflow-hidden">
+                <CandidateTranscriptCard candidate={candidate} />
+              </div>
+            </div>
+          )}
         </div>
       </Main>
     </>

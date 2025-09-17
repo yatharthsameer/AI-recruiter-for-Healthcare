@@ -4,10 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
+// import { ScrollArea } from '@/components/ui/scroll-area'
+// import { Separator } from '@/components/ui/separator'
 import { type Candidate } from '../data/schema'
-import { recommendations, statuses, competencyLabels, scoreRanges } from '../data/data'
+import { recommendations, statuses, scoreRanges } from '../data/data'
 import { CandidateProfilePanel } from './candidate-profile-panel'
 import { TranscriptPanel } from './transcript/transcript-panel'
 import { CompetencyChart } from './competency-chart'
@@ -19,6 +19,7 @@ interface CandidateDetailViewProps {
 
 export function CandidateDetailView({ candidate, onClose }: CandidateDetailViewProps) {
   const [activeTab, setActiveTab] = useState('profile')
+  const [selectedCompetency, setSelectedCompetency] = useState<string | undefined>(undefined)
   
   const recommendation = recommendations.find(r => r.value === candidate.recommendation)
   const status = statuses.find(s => s.value === candidate.status)
@@ -91,7 +92,7 @@ export function CandidateDetailView({ candidate, onClose }: CandidateDetailViewP
               </TabsContent>
 
               <TabsContent value="transcript" className="h-full mt-4">
-                <TranscriptPanel candidate={candidate} />
+                <TranscriptPanel candidate={candidate} selectedCompetency={selectedCompetency} />
               </TabsContent>
 
               <TabsContent value="competencies" className="h-full mt-4">
@@ -101,7 +102,16 @@ export function CandidateDetailView({ candidate, onClose }: CandidateDetailViewP
                       <CardTitle>Competency Breakdown</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <CompetencyChart competencyScores={candidate.competencyScores} />
+                      <CompetencyChart 
+                        competencyScores={candidate.competencyScores} 
+                        onSelect={(k) => {
+                          setSelectedCompetency(k)
+                          setActiveTab('transcript')
+                          // Broadcast event for listeners like TranscriptCard
+                          try { window.dispatchEvent(new CustomEvent('competencySelect', { detail: { key: k } })) } catch (_err) {}
+                        }}
+                        selected={selectedCompetency}
+                      />
                     </CardContent>
                   </Card>
                   

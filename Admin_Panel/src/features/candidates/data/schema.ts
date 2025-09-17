@@ -14,11 +14,11 @@ export const candidateSchema = z.object({
   interviewDate: z.string(),
   duration: z.number(), // in seconds
   competencyScores: z.object({
-    empathy_compassion: z.number().min(0).max(10),
-    safety_awareness: z.number().min(0).max(10),
-    communication_skills: z.number().min(0).max(10),
-    problem_solving: z.number().min(0).max(10),
-    experience_commitment: z.number().min(0).max(10),
+    experience_skills: z.number().min(0).max(10),
+    motivation: z.number().min(0).max(10),
+    punctuality: z.number().min(0).max(10),
+    compassion_empathy: z.number().min(0).max(10),
+    communication: z.number().min(0).max(10),
   }),
   strengths: z.array(z.string()),
   developmentAreas: z.array(z.string()),

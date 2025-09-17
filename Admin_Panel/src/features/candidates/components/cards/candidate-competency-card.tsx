@@ -5,6 +5,7 @@ import { competencyLabels, scoreRanges } from '../../data/data'
 
 interface CandidateCompetencyCardProps {
   candidate: Candidate
+  onSelect?: (competencyKey: string) => void
 }
 
 // Circular Progress Component
@@ -69,7 +70,7 @@ function CircularProgress({ value, max = 10, size = 80, strokeWidth = 8, classNa
   )
 }
 
-export function CandidateCompetencyCard({ candidate }: CandidateCompetencyCardProps) {
+export function CandidateCompetencyCard({ candidate, onSelect }: CandidateCompetencyCardProps) {
   const getScoreColor = (score: number) => {
     if (score >= 8) return scoreRanges.excellent
     if (score >= 6) return scoreRanges.good
@@ -78,7 +79,7 @@ export function CandidateCompetencyCard({ candidate }: CandidateCompetencyCardPr
   }
 
   return (
-    <Card>
+    <Card className='h-full'>
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <Target className="h-5 w-5" />
@@ -92,8 +93,19 @@ export function CandidateCompetencyCard({ candidate }: CandidateCompetencyCardPr
             const label = competencyLabels[key as keyof typeof competencyLabels]
             
             return (
-              <div key={key} className="flex flex-col items-center space-y-3">
-                <CircularProgress value={score} max={10} size={70} strokeWidth={6} />
+              <div
+                key={key}
+                className="flex flex-col items-center space-y-3 cursor-pointer"
+                onClick={() => {
+                  if (onSelect) onSelect(key)
+                  try {
+                    window.dispatchEvent(new CustomEvent('competencySelect', { detail: { key } }))
+                  } catch (_err) {}
+                }}
+                role="button"
+                aria-label={`Jump to ${label} segment`}
+              >
+                <CircularProgress value={score} max={10} size={70} strokeWidth={6} className="hover:opacity-90" />
                 <div className="text-center">
                   <div className="text-sm font-medium leading-tight">
                     {label}
@@ -126,6 +138,39 @@ export function CandidateCompetencyCard({ candidate }: CandidateCompetencyCardPr
             <span>Poor (0-3)</span>
           </div>
         </div>
+
+        <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Waveform Color Legend:</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(107,114,128,0.4)' }}></div>
+                  <span>All Speech</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(37, 99, 235, 0.4)' }}></div>
+                  <span>Empathy & Compassion</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(16, 185, 129, 0.4)' }}></div>
+                  <span>Experience & Commitment</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(234, 179, 8, 0.4)' }}></div>
+                  <span>Problem Solving</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(244, 63, 94, 0.4)' }}></div>
+                  <span>Safety Awareness</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(139, 92, 246, 0.4)' }}></div>
+                  <span>Communication Skills</span>
+                </div>
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                💡 Click on competency scores to highlight specific segments in the waveform
+              </div>
+            </div>
       </CardContent>
     </Card>
   )

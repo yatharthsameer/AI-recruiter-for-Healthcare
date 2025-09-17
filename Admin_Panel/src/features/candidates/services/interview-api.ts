@@ -17,7 +17,7 @@ export class InterviewApiService {
       }
       
       const data = await response.json()
-      return this.transformInterviewData(data)
+      return this.transformInterviewData(data.interviews || [])
     } catch (error) {
       console.error('Error fetching interviews:', error)
       // Return empty array on error - in production, you might want to show an error state
@@ -37,8 +37,8 @@ export class InterviewApiService {
       }
       
       const data = await response.json()
-      // Return the raw data since it's already in the correct format
-      return data
+      // Transform to our Transcript schema including audio URLs and analysis
+      return this.transformTranscriptData(data)
     } catch (error) {
       console.error('Error fetching transcript:', error)
       return null
@@ -70,29 +70,39 @@ export class InterviewApiService {
     return rawData.map(interview => {
       const userData = interview.userData || {}
       const evaluation = interview.caregiverEvaluation || {}
+      const scores = evaluation.scores || {}
+      
+      // Map the evaluation scores to admin panel schema (using actual evaluation criteria)
+      const competencyScores = {
+        experience_skills: Math.min(10, Math.max(0, scores.experience_skills?.score || 0)),
+        motivation: Math.min(10, Math.max(0, scores.motivation?.score || 0)),
+        punctuality: Math.min(10, Math.max(0, scores.punctuality?.score || 0)),
+        compassion_empathy: Math.min(10, Math.max(0, scores.compassion_empathy?.score || 0)),
+        communication: Math.min(10, Math.max(0, scores.communication?.score || 0)),
+      }
+      
+      // Calculate overall score from individual scores (already on 0-10 scale)
+      const overallScore = scores.overall_score || 
+        Math.round((competencyScores.experience_skills + competencyScores.motivation + 
+                   competencyScores.punctuality + competencyScores.compassion_empathy + 
+                   competencyScores.communication) / 5) // Keep on 0-10 scale
       
       return {
         id: interview.sessionId,
         candidateName: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Unknown',
         email: userData.email || '',
         phone: userData.phone || '',
-        position: userData.position || 'caregiver',
-        interviewType: interview.interviewType || 'general',
-        overallScore: evaluation.overallScore || 0,
-        recommendation: this.mapRecommendation(evaluation.recommendation?.recommendation),
+        position: 'caregiver', // Default position
+        interviewType: interview.interviewType || 'caregiving',
+        overallScore: Math.min(100, Math.max(0, Math.round(typeof overallScore === 'number' ? overallScore * 10 : 0))), // Convert 0-10 scale to 0-100 scale, clamped to 0-100
+        recommendation: this.mapRecommendation(scores.recommendation),
         status: this.mapStatus(interview.status),
         interviewDate: interview.startTime || new Date().toISOString(),
         duration: interview.duration || 0,
-        competencyScores: {
-          empathy_compassion: evaluation.competencyScores?.empathy_compassion || 0,
-          safety_awareness: evaluation.competencyScores?.safety_awareness || 0,
-          communication_skills: evaluation.competencyScores?.communication_skills || 0,
-          problem_solving: evaluation.competencyScores?.problem_solving || 0,
-          experience_commitment: evaluation.competencyScores?.experience_commitment || 0,
-        },
-        strengths: evaluation.strengths || [],
-        developmentAreas: evaluation.developmentAreas || [],
-        nextSteps: evaluation.nextSteps || [],
+        competencyScores,
+        strengths: this.extractStrengths(scores),
+        developmentAreas: this.extractDevelopmentAreas(scores),
+        nextSteps: this.generateNextSteps(scores.recommendation),
         createdAt: new Date(interview.startTime || Date.now()),
         updatedAt: new Date(interview.endTime || Date.now()),
       }
@@ -105,42 +115,83 @@ export class InterviewApiService {
   private static transformTranscriptData(rawData: any): Transcript {
     const entries = []
     
-    // Parse questions and responses from transcript
-    if (rawData.questions && rawData.responses) {
-      for (let i = 0; i < rawData.questions.length; i++) {
-        const question = rawData.questions[i]
-        const response = rawData.responses[i]
+    // Parse transcript entries from your actual format
+    if (rawData.transcript && Array.isArray(rawData.transcript)) {
+      let questionNumber = 0
+      
+      rawData.transcript.forEach((entry: any, index: number) => {
+        const timestamp = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : ''
+        const rawTimestamp = entry.timestamp || ''
         
-        // Add question entry
-        entries.push({
-          type: 'question' as const,
-          speaker: 'ai' as const,
-          content: question.question,
-          timestamp: new Date(question.timestamp).toLocaleTimeString(),
-          questionNumber: question.questionNumber,
-        })
-        
-        // Add response entry if exists
-        if (response) {
+        if (entry.type === 'ai') {
+          questionNumber++
+          entries.push({
+            type: 'question' as const,
+            speaker: 'ai' as const,
+            content: entry.message,
+            timestamp,
+            // preserve raw timestamp for precise seeking
+            rawTimestamp,
+            questionNumber,
+          })
+        } else if (entry.type === 'user') {
           entries.push({
             type: 'answer' as const,
             speaker: 'candidate' as const,
-            content: response.response,
-            timestamp: new Date(response.timestamp).toLocaleTimeString(),
-            duration: this.calculateResponseDuration(question.timestamp, response.timestamp),
-            questionNumber: response.questionNumber,
-            analysis: response.analysis ? {
-              sentiment: this.analyzeSentiment(response.response),
-              keyTerms: this.extractKeyTerms(response.response),
-              scoreImpact: response.analysis.scoreImpact || {},
-              flags: response.analysis.flags || [],
-            } : undefined,
+            content: entry.message,
+            timestamp,
+            rawTimestamp,
+            questionNumber,
+            duration: this.calculateResponseDurationFromIndex(rawData.transcript, index),
+          })
+        } else if (entry.type === 'system') {
+          entries.push({
+            type: 'system' as const,
+            speaker: 'system' as const,
+            content: entry.message,
+            timestamp,
+            rawTimestamp,
           })
         }
-      }
+      })
     }
     
-    return {
+    // Generate audio segments from transcript timestamps
+    const audioSegments = []
+    if (rawData.transcript && Array.isArray(rawData.transcript)) {
+      let questionNumber = 0
+      
+      rawData.transcript.forEach((entry: any, index: number) => {
+        if (entry.type === 'user' && entry.timestamp) {
+          // Find the corresponding question
+          let questionStart = null
+          for (let i = index - 1; i >= 0; i--) {
+            if (rawData.transcript[i].type === 'ai') {
+              questionStart = rawData.transcript[i].timestamp
+              questionNumber++
+              break
+            }
+          }
+          
+          if (questionStart && entry.timestamp) {
+            try {
+              const startTime = new Date(questionStart).getTime()
+              const endTime = new Date(entry.timestamp).getTime() + 10000 // Add 10 seconds for response duration
+              
+              audioSegments.push({
+                questionNumber,
+                startMs: startTime - new Date(rawData.transcript[0].timestamp).getTime(),
+                endMs: endTime - new Date(rawData.transcript[0].timestamp).getTime(),
+              })
+            } catch (error) {
+              // Skip if timestamp parsing fails
+            }
+          }
+        }
+      })
+    }
+
+    const result: any = {
       sessionId: rawData.sessionId,
       entries,
       metadata: {
@@ -155,6 +206,28 @@ export class InterviewApiService {
         },
       },
     }
+
+    // Pass through full audio if provided by backend, or create from audio metadata
+    if (rawData.fullAudio?.url) {
+      result.fullAudio = {
+        url: `${API_BASE_URL}${rawData.fullAudio.url}`,
+        segments: Array.isArray(rawData.fullAudio.segments) ? rawData.fullAudio.segments : audioSegments,
+      }
+    } else {
+      // Create audio URL from metadata filename (backend now provides correct filename)
+      const audioFilename = rawData.metadata?.audio_filename || `${rawData.sessionId}.webm`
+      result.fullAudio = {
+        url: `${API_BASE_URL}/interview-outputs/${audioFilename}`,
+        segments: audioSegments,
+      }
+    }
+
+    // Pass through competencySegments mapping to help UI jump precisely
+    if (rawData.competencySegments && typeof rawData.competencySegments === 'object') {
+      result.competencySegments = rawData.competencySegments
+    }
+    
+    return result
   }
 
   /**
@@ -162,6 +235,11 @@ export class InterviewApiService {
    */
   private static mapRecommendation(recommendation: string): string {
     const mapping: Record<string, string> = {
+      'highly_recommend': 'highly_recommended',
+      'recommend': 'recommended', 
+      'consider': 'consider_with_training',
+      'not_recommend': 'not_recommended',
+      // Legacy mappings
       'Highly Recommended': 'highly_recommended',
       'Recommended': 'recommended',
       'Consider with Training': 'consider_with_training',
@@ -169,6 +247,87 @@ export class InterviewApiService {
     }
     
     return mapping[recommendation] || 'consider_with_training'
+  }
+
+  /**
+   * Extract strengths from evaluation scores
+   */
+  private static extractStrengths(scores: any): string[] {
+    const strengths: string[] = []
+    
+    if (scores.compassion_empathy?.score >= 8) {
+      strengths.push('Strong empathy and compassion')
+    }
+    if (scores.communication?.score >= 8) {
+      strengths.push('Excellent communication skills')
+    }
+    if (scores.experience_skills?.score >= 8) {
+      strengths.push('Relevant caregiving experience')
+    }
+    if (scores.punctuality?.score >= 8) {
+      strengths.push('Reliable and punctual')
+    }
+    if (scores.motivation?.score >= 8) {
+      strengths.push('Strong motivation for caregiving')
+    }
+    
+    // Add reasoning as strengths if available
+    Object.values(scores).forEach((scoreObj: any) => {
+      if (scoreObj?.reasoning && scoreObj?.score >= 8) {
+        const reasoning = scoreObj.reasoning.toLowerCase()
+        if (reasoning.includes('professional') && !strengths.some(s => s.includes('professional'))) {
+          strengths.push('Professional demeanor')
+        }
+        if (reasoning.includes('patient') && !strengths.some(s => s.includes('patient'))) {
+          strengths.push('Patient-centered approach')
+        }
+      }
+    })
+    
+    return strengths.length > 0 ? strengths : ['Completed interview assessment']
+  }
+
+  /**
+   * Extract development areas from evaluation scores
+   */
+  private static extractDevelopmentAreas(scores: any): string[] {
+    const areas: string[] = []
+    
+    if (scores.compassion_empathy?.score < 7) {
+      areas.push('Develop empathy and patient interaction skills')
+    }
+    if (scores.communication?.score < 7) {
+      areas.push('Improve communication clarity')
+    }
+    if (scores.experience_skills?.score < 7) {
+      areas.push('Gain more hands-on caregiving experience')
+    }
+    if (scores.punctuality?.score < 7) {
+      areas.push('Improve punctuality and reliability')
+    }
+    if (scores.motivation?.score < 7) {
+      areas.push('Strengthen commitment to caregiving career')
+    }
+    
+    return areas.length > 0 ? areas : ['Continue professional development']
+  }
+
+  /**
+   * Generate next steps based on recommendation
+   */
+  private static generateNextSteps(recommendation: string): string[] {
+    const baseSteps = ['Reference checks', 'Background verification']
+    
+    switch (recommendation) {
+      case 'highly_recommend':
+        return [...baseSteps, 'Schedule orientation', 'Prepare job offer']
+      case 'recommend':
+        return [...baseSteps, 'Skills assessment', 'Final interview']
+      case 'consider':
+        return [...baseSteps, 'Additional training assessment', 'Follow-up interview']
+      default:
+        return [...baseSteps, 'Further evaluation needed']
+    }
   }
 
   /**
@@ -192,6 +351,25 @@ export class InterviewApiService {
     const questionDate = new Date(questionTime)
     const responseDate = new Date(responseTime)
     return Math.max(0, Math.floor((responseDate.getTime() - questionDate.getTime()) / 1000))
+  }
+
+  /**
+   * Calculate response duration from transcript array index
+   */
+  private static calculateResponseDurationFromIndex(transcript: any[], currentIndex: number): number {
+    // Find the previous AI message (question)
+    for (let i = currentIndex - 1; i >= 0; i--) {
+      if (transcript[i].type === 'ai') {
+        try {
+          const questionTime = new Date(transcript[i].timestamp)
+          const responseTime = new Date(transcript[currentIndex].timestamp)
+          return Math.max(0, Math.floor((responseTime.getTime() - questionTime.getTime()) / 1000))
+        } catch {
+          return 0
+        }
+      }
+    }
+    return 0
   }
 
   /**

@@ -1,0 +1,88 @@
+{
+  "timestamp": "2025-09-17T00:21:39.476564",
+  "session_id": "session_1758048595544",
+  "user_data": {
+    "firstName": "Yatharth",
+    "lastName": "Sameer",
+    "email": "ytharthsmr@gmail.com",
+    "phone": "+1919508640578",
+    "caregivingExperience": true,
+    "hasPerId": true,
+    "driversLicense": true,
+    "autoInsurance": true,
+    "availability": [
+      "Morning"
+    ],
+    "weeklyHours": 30,
+    "languages": [],
+    "perId": "",
+    "ssn": ""
+  },
+  "transcript": [
+    {
+      "type": "system",
+      "message": "Interview session connected. Microphone is ready."
+    },
+    {
+      "type": "system",
+      "message": "Microphone enabled. You can start speaking."
+    },
+    {
+      "type": "system",
+      "message": "Interview started. Please introduce yourself and share what drew you to caregiving work."
+    },
+    {
+      "type": "user",
+      "message": "Bye."
+    },
+    {
+      "type": "ai",
+      "message": "Hi, I'm CareBot. This interview will take about 12 minutes. I'll ask for short examples from your experience. Please avoid sharing private patient details. Ready? \n\nLet's get started. "
+    },
+    {
+      "type": "user",
+      "message": "Yes"
+    },
+    {
+      "type": "ai",
+      "message": "Hi, I'm CareBot. This will take about 12 minutes. Short examples help. Please avoid private patient details. Ready?"
+    },
+    {
+      "type": "user",
+      "message": "Yes"
+    },
+    {
+      "type": "ai",
+      "message": "Great. Let's get started. Question 1: Have you ever worked as a caregiver? If so, what kinds of patients did you work with and what services did you perform?"
+    },
+    {
+      "type": "user",
+      "message": "I'm not a fishery, but I've helped family here and there. I'm a good learner, so I can figure it out on the spot."
+    },
+    {
+      "type": "ai",
+      "message": "Got it. Thanks for sharing that. Question 2: Imagine you're finding a caregiver for a loved one. What traits or skills would be most important?"
+    },
+    {
+      "type": "user",
+      "message": "I mean someone who gets things done fast and doesn't make a big deal out of small stuff."
+    },
+    {
+      "type": "ai",
+      "message": "Got it. Efficiency and a calm approach are important. Last question: How has your prior work or life experience helped you build the skills to be a good caregiver?"
+    },
+    {
+      "type": "user",
+      "message": "My past job is fund caregiving but work is work. Give me a checklist and I'll take it off."
+    },
+    {
+      "type": "ai",
+      "message": "Thank you for sharing, [Candidate_Name]. We'll review and update you soon. Please leave the meeting by clicking the button below. Take care."
+    }
+  ],
+  "metadata": {
+    "interview_type": "caregiving",
+    "system": "CareBot Interview System",
+    "version": "1.0"
+  }
+}

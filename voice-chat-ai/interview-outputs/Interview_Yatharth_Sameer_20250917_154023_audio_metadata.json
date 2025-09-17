@@ -1,0 +1,60 @@
+{
+  "timestamp": "2025-09-17T15:40:23.676534",
+  "session_id": "session_1758103609221",
+  "user_data": {
+    "firstName": "Yatharth",
+    "lastName": "Sameer",
+    "email": "ytharthsmr@gmail.com",
+    "phone": "+1919508640578",
+    "caregivingExperience": true,
+    "hasPerId": true,
+    "driversLicense": true,
+    "autoInsurance": true,
+    "availability": [
+      "Morning"
+    ],
+    "weeklyHours": 30,
+    "languages": [],
+    "perId": "",
+    "ssn": ""
+  },
+  "audio_filename": "Interview_Yatharth_Sameer_20250917_154023.webm",
+  "audio_filepath": "interview-outputs/Interview_Yatharth_Sameer_20250917_154023.webm",
+  "file_size": 3447933,
+  "content_type": "audio/webm",
+  "metadata": {
+    "recording_type": "interview_audio",
+    "system": "CareBot Interview System",
+    "version": "1.0"
+  },
+  "evaluation": {
+    "timestamp": "2025-09-17T15:40:41.054454",
+    "evaluator": "ChatGPT-4",
+    "scores": {
+      "experience_skills": {
+        "score": 8,
+        "reasoning": "The candidate has relevant caregiving experience and has demonstrated a good understanding of the practical skills required for the role."
+      },
+      "motivation": {
+        "score": 7,
+        "reasoning": "The candidate has a genuine interest in caregiving and understands the role. However, the candidate's commitment to the career is not clearly expressed."
+      },
+      "punctuality": {
+        "score": 7,
+        "reasoning": "The candidate has shown an understanding of the importance of punctuality and has taken steps to ensure it. However, there was an instance of being late."
+      },
+      "compassion_empathy": {
+        "score": 9,
+        "reasoning": "The candidate has shown a high level of emotional intelligence, a caring nature, and a patient-centered approach."
+      },
+      "communication": {
+        "score": 8,
+        "reasoning": "The candidate communicates clearly and professionally, and has demonstrated good listening skills."
+      },
+      "overall_score": 7.8,
+      "overall_assessment": "The candidate has a good mix of experience, skills, and emotional intelligence. However, there are areas for improvement in terms of career commitment and punctuality.",
+      "recommendation": "consider"
+    },
+    "session_id": "session_1758103609221"
+  }
+}

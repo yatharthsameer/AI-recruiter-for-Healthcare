@@ -1,0 +1,62 @@
+{
+  "timestamp": "2025-09-17T13:51:36.266394",
+  "session_id": "session_1758097044087",
+  "user_data": {
+    "firstName": "Yatharth",
+    "lastName": "Sameer",
+    "email": "ytharthsmr@gmail.com",
+    "phone": "+1919508640578",
+    "caregivingExperience": true,
+    "hasPerId": true,
+    "driversLicense": true,
+    "autoInsurance": true,
+    "availability": [
+      "Morning"
+    ],
+    "weeklyHours": 30,
+    "languages": [
+      "English"
+    ],
+    "perId": "",
+    "ssn": ""
+  },
+  "audio_filename": "Interview_Yatharth_Sameer_20250917_135136.webm",
+  "audio_filepath": "interview-outputs/Interview_Yatharth_Sameer_20250917_135136.webm",
+  "file_size": 4055564,
+  "content_type": "audio/webm",
+  "metadata": {
+    "recording_type": "interview_audio",
+    "system": "CareBot Interview System",
+    "version": "1.0"
+  },
+  "evaluation": {
+    "timestamp": "2025-09-17T13:51:46.206435",
+    "evaluator": "ChatGPT-4",
+    "scores": {
+      "experience_skills": {
+        "score": 8,
+        "reasoning": "The candidate has relevant caregiving experience and demonstrated practical skills in caregiving tasks."
+      },
+      "motivation": {
+        "score": 7,
+        "reasoning": "The candidate expressed a genuine interest in caregiving and finds the job rewarding, but did not elaborate much on career commitment."
+      },
+      "punctuality": {
+        "score": 9,
+        "reasoning": "The candidate has shown understanding of the importance of punctuality and has implemented measures to ensure consistent punctuality."
+      },
+      "compassion_empathy": {
+        "score": 8,
+        "reasoning": "The candidate demonstrated emotional intelligence and a patient-centered approach in their responses."
+      },
+      "communication": {
+        "score": 8,
+        "reasoning": "The candidate communicated clearly and professionally throughout the interview."
+      },
+      "overall_score": 8,
+      "overall_assessment": "The candidate has a good mix of experience, skills, and emotional intelligence necessary for caregiving. They have demonstrated punctuality and good communication skills.",
+      "recommendation": "consider"
+    },
+    "session_id": "session_1758097044087"
+  }
+}

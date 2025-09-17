@@ -1,0 +1,32 @@
+{
+  "evaluationId": "eval_fca14257-369a-4448-aa61-875f04464b1f_20250916_014158",
+  "timestamp": "2025-09-16T01:41:58.282849",
+  "sessionId": "fca14257-369a-4448-aa61-875f04464b1f",
+  "candidateInfo": {
+    "firstName": "Yatharth",
+    "lastName": "Sameer",
+    "email": "ytharthsmr@gmail.com",
+    "phone": "+1919508640578",
+    "position": "Caregiver",
+    "hhaExperience": true,
+    "cprCertified": true,
+    "driversLicense": true,
+    "autoInsurance": true,
+    "reliableTransport": true,
+    "locationPref": "c",
+    "availability": [
+      "Morning"
+    ],
+    "weeklyHours": 30
+  },
+  "transcript": "Q1: Yatharth, Have you ever worked as a caregiver? If so, what kinds of patients/customers did you work with and what services/activities did you perform?\nA1: Yeah, that's hard. Have you ever worked as a caregiver? If so, what kinds of patients, customers did you work with and what services, activities did you perform? Not officially. I have helped family here and there. Uh, but I'm a quick learner so I can figure it out on the spot.\n\nQ2: Yatharth, Imagine you're finding a caregiver for a loved one. What traits or skills would be most important?\nA2: Can you repeat your question?\n\nQ3: Yatharth, Have you ever worked as a caregiver? If so, what kinds of patients/customers did you work with and what services/activities did you perform?\nA3: Not officially, but I have helped family here and there. I'm a quick learner so I can figure it out on the spot.\n\nQ4: Yatharth, Have you ever worked as a caregiver? If so, what kinds of patients/customers did you work with and what services/activities did you perform?\nA4: Not officially, but I have helped family here and there. I'm a quick learner, so I can figure it out on the spot. And I've been working for a daycare for two years, uh, giving uh, handling, bathing, dressing, light meal prep, medication reminders, basic mobility support and uh also a little housekeeping.\n\nQ5: Yatharth, Have you ever worked as a caregiver? If so, what kinds of patients/customers did you work with and what services/activities did you perform?\nA5: [No response recorded]\n",
+  "scores": {
+    "Experience & Skills": 5.0,
+    "Motivation": 5.0,
+    "Punctuality": 5.0,
+    "Compassion and Empathy": 5.0,
+    "Communication": 5.0
+  },
+  "overallScore": 5.0,
+  "evaluationType": "text-based"
+}
