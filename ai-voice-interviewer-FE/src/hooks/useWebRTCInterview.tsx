@@ -44,7 +44,7 @@ export function useWebRTCInterview(navigate?: (path: string) => void) {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState('');
   const [questionNumber, setQuestionNumber] = useState(0);
-  const [transcript, setTranscript] = useState<Array<{type: 'user' | 'ai' | 'system' | 'error', message: string}>>([]);
+  const [transcript, setTranscript] = useState<Array<{type: 'user' | 'ai' | 'system' | 'error', message: string, timestamp: string}>>([]);
   const [sessionId, setSessionId] = useState<string>('');
   const [isMicrophoneEnabled, setIsMicrophoneEnabled] = useState(false);
   
@@ -82,7 +82,8 @@ export function useWebRTCInterview(navigate?: (path: string) => void) {
 
   // Add transcript message
   const addTranscriptMessage = useCallback((message: string, type: 'user' | 'ai' | 'system' | 'error') => {
-    setTranscript(prev => [...prev, { type, message }]);
+    const timestamp = new Date().toISOString();
+    setTranscript(prev => [...prev, { type, message, timestamp }]);
     
     // Update current question if it's an AI message
     if (type === 'ai') {
@@ -248,7 +249,7 @@ export function useWebRTCInterview(navigate?: (path: string) => void) {
   }, [addTranscriptMessage, sessionId, toast]);
 
   // Evaluate interview with ChatGPT (internal use only)
-  const evaluateInterview = useCallback(async (transcript: Array<{type: 'user' | 'ai' | 'system' | 'error', message: string}>, userData: UserData) => {
+  const evaluateInterview = useCallback(async (transcript: Array<{type: 'user' | 'ai' | 'system' | 'error', message: string, timestamp: string}>, userData: UserData) => {
     try {
       console.log('🤖 Starting internal interview evaluation...');
       
@@ -794,7 +795,7 @@ Keep responses brief, warm, and professional. This is a voice conversation for h
   }, [addTranscriptMessage]);
 
   // Save transcript to backend
-  const saveTranscriptToBackend = useCallback(async (transcript: Array<{type: 'user' | 'ai' | 'system' | 'error', message: string}>, userData: UserData) => {
+  const saveTranscriptToBackend = useCallback(async (transcript: Array<{type: 'user' | 'ai' | 'system' | 'error', message: string, timestamp: string}>, userData: UserData) => {
     try {
       console.log('💾 Saving transcript to backend...');
       
