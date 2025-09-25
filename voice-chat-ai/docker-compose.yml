@@ -1,22 +1,199 @@
-version: "3.8"
-
 services:
-  voice-chat-ai:
-    image: bigsk1/voice-chat-ai:latest
-    container_name: voice-chat-ai
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: interview_postgres
     environment:
-      - PULSE_SERVER=/mnt/wslg/PulseServer  # Default: WSL2 PulseAudio server (Windows CMD or WSL2 Ubuntu)
-      # - PULSE_SERVER=unix:/tmp/pulse/native  # Uncomment for native Ubuntu/Debian with PulseAudio
-    env_file:
-      - .env  # Loads app config (e.g., TTS_PROVIDER, API keys)
+      POSTGRES_DB: interview_bot
+      POSTGRES_USER: interview_admin
+      POSTGRES_PASSWORD: secure_password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
     volumes:
-      - \\wsl$\Ubuntu\mnt\wslg:/mnt/wslg/  # Default: WSL2 audio mount for Windows CMD with Docker Desktop
-      # - /mnt/wslg/:/mnt/wslg/  # Uncomment for WSL2 Ubuntu (running Docker inside WSL2 distro)
-      # - ~/.config/pulse/cookie:/root/.config/pulse/cookie:ro  # Uncomment for native Ubuntu/Debian
-      # - /run/user/1000/pulse:/tmp/pulse:ro  # Uncomment and adjust UID (e.g., 1000) for native Ubuntu/Debian
-      - ./elevenlabs_voices.json:/app/elevenlabs_voices.json  # Add your own voice IDs or comment out to not use ElevenLabs
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/seed_reference_answers.sql:/docker-entrypoint-initdb.d/02-seed-data.sql
     ports:
-      - "8000:8000"  # Expose web UI or API port
-    restart: unless-stopped  # Restart unless manually stopped
-    tty: true  # Enable CLI interactivity (e.g., cli.py)
-    stdin_open: true  # Keep STDIN open for interactive use
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U interview_admin -d interview_bot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - interview_network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: interview_redis
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - interview_network
+
+  # Elasticsearch Vector Database
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: interview_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - interview_network
+
+  # AI Interviewer Bot Application
+  app:
+    build: .
+    container_name: interview_app
+    environment:
+      # Database Configuration
+      - DATABASE_URL=postgresql://interview_admin:${POSTGRES_PASSWORD:-secure_password}@postgres:5432/interview_bot
+      - REDIS_URL=redis://redis:6379/0
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      
+      # OpenAI Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_MODEL_TTS=${OPENAI_MODEL_TTS:-gpt-4o-mini-tts}
+      - OPENAI_TRANSCRIPTION_MODEL=${OPENAI_TRANSCRIPTION_MODEL:-gpt-4o-mini-transcribe}
+      - OPENAI_TTS_VOICE=${OPENAI_TTS_VOICE:-alloy}
+      
+      # Model Provider
+      - MODEL_PROVIDER=${MODEL_PROVIDER:-openai}
+      - TTS_PROVIDER=${TTS_PROVIDER:-openai}
+      
+      # Character Configuration
+      - CHARACTER_NAME=${CHARACTER_NAME:-carebot}
+      
+      # Voice Configuration
+      - VOICE_SPEED=${VOICE_SPEED:-1.0}
+      - MAX_CHAR_LENGTH=${MAX_CHAR_LENGTH:-500}
+      
+      # System Configuration
+      - FASTER_WHISPER_LOCAL=${FASTER_WHISPER_LOCAL:-false}
+      - DEBUG=${DEBUG:-false}
+      
+      # Enhanced System Configuration
+      - RAG_SYSTEM_ENABLED=${RAG_SYSTEM_ENABLED:-true}
+      - ML_PREDICTIONS_ENABLED=${ML_PREDICTIONS_ENABLED:-true}
+      - REAL_TIME_RANKINGS_ENABLED=${REAL_TIME_RANKINGS_ENABLED:-true}
+      
+      # Vector Database Configuration
+      - VECTOR_DB_TYPE=${VECTOR_DB_TYPE:-elasticsearch}
+      - ELASTICSEARCH_INDEX_NAME=${ELASTICSEARCH_INDEX_NAME:-caregiver_answers}
+      - ELASTICSEARCH_TIMEOUT=${ELASTICSEARCH_TIMEOUT:-30}
+      
+      # ML Model Configuration
+      - ML_MODELS_PATH=${ML_MODELS_PATH:-/app/models}
+      - ML_RETRAIN_THRESHOLD=${ML_RETRAIN_THRESHOLD:-20}
+      - ML_CONFIDENCE_THRESHOLD=${ML_CONFIDENCE_THRESHOLD:-0.7}
+      
+      # Scoring Configuration
+      - SCORING_SCALE=${SCORING_SCALE:-100}
+      - EMPATHY_BONUS_MULTIPLIER=${EMPATHY_BONUS_MULTIPLIER:-1.12}
+      - PATIENT_STORY_BONUS_MULTIPLIER=${PATIENT_STORY_BONUS_MULTIPLIER:-1.08}
+      - CARE_EXPERIENCE_BONUS_MULTIPLIER=${CARE_EXPERIENCE_BONUS_MULTIPLIER:-1.05}
+      - DIGNITY_MENTION_BONUS_MULTIPLIER=${DIGNITY_MENTION_BONUS_MULTIPLIER:-1.05}
+      
+      # Question Weights
+      - EXPERIENCE_WEIGHT=${EXPERIENCE_WEIGHT:-0.30}
+      - MOTIVATION_WEIGHT=${MOTIVATION_WEIGHT:-0.20}
+      - PUNCTUALITY_WEIGHT=${PUNCTUALITY_WEIGHT:-0.15}
+      - EMPATHY_WEIGHT=${EMPATHY_WEIGHT:-0.25}
+      - COMMUNICATION_WEIGHT=${COMMUNICATION_WEIGHT:-0.10}
+      
+      # Tier Thresholds
+      - TIER_A_PLUS_SCORE=${TIER_A_PLUS_SCORE:-90}
+      - TIER_A_PLUS_PERCENTILE=${TIER_A_PLUS_PERCENTILE:-95}
+      - TIER_A_SCORE=${TIER_A_SCORE:-85}
+      - TIER_A_PERCENTILE=${TIER_A_PERCENTILE:-85}
+      
+      # Cache Configuration
+      - REDIS_CACHE_TTL=${REDIS_CACHE_TTL:-300}
+      - LEADERBOARD_CACHE_SIZE=${LEADERBOARD_CACHE_SIZE:-100}
+    volumes:
+      - ./outputs:/app/outputs
+      - ./interview-outputs:/app/interview-outputs
+      - ./models:/app/models
+      - ./logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/enhanced/system/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - interview_network
+    restart: unless-stopped
+
+  # Elasticsearch Kibana (Optional - for monitoring)
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: interview_kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - xpack.security.enabled=false
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - interview_network
+    profiles:
+      - monitoring
+
+  # Redis Commander (Optional - for Redis monitoring)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: interview_redis_commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - interview_network
+    profiles:
+      - monitoring
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+
+networks:
+  interview_network:
+    driver: bridge

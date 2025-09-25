@@ -1,36 +1,65 @@
-# CUDA-enabled PyTorch and related libraries
+# Database drivers
+asyncpg==0.29.0
+redis[hiredis]==5.0.1
+psycopg2-binary==2.9.9   # Alternative PostgreSQL driver
+
+# Vector Database + RAG
+elasticsearch[async]==8.11.0
+sentence-transformers==2.2.2
+
+# Machine Learning & Data
+scikit-learn==1.3.0
+pandas==1.5.3
+numpy==1.26.4
+scipy==1.11.4
+joblib==1.3.2
+
+# Text Processing
+textblob==0.18.0.post0
+nltk==3.8.1
+langid==1.1.6
+spacy==3.7.5
+spacy-legacy==3.0.12
+spacy-loggers==1.0.5
+
+# PyTorch + CUDA (GPU enabled)
 torch>=2.6.0,<2.8.0
 torchaudio>=2.6.0,<2.8.0
 torchvision>=0.21.0,<0.23.0
 --extra-index-url https://download.pytorch.org/whl/cu118
 
+# Audio / Speech
 PyAudio==0.2.14
-numpy==1.26.4
 faster-whisper==1.1.1
-soundfile==0.12.1    
-langid==1.1.6
-librosa==0.10.2.post1
-scipy==1.11.4
-transformers==4.51.0
-pydantic==2.7.4
-pillow==10.3.0
-
+soundfile==0.12.1
 pydub==0.25.1
-openai==1.68.2
-anthropic==0.49.0
-textblob==0.18.0.post0
-python-dotenv==1.0.1 
-requests==2.32.4 
-fastapi==0.115.11
-uvicorn==0.30.1
-aiohttp==3.12.14
-spacy==3.7.5
-spacy-legacy==3.0.12
-spacy-loggers==1.0.5
+librosa==0.10.2.post1
+TTS==0.20.6
 coqui-tts==0.26.0
 
-# WebRTC-specific dependencies
+# Core AI APIs
+openai==1.68.2
+anthropic==0.49.0
+transformers==4.51.0
+
+# API & Web Framework
+fastapi==0.115.11
+uvicorn[standard]==0.30.1
+pydantic==2.7.4
+aiohttp==3.12.14
+httpx==0.28.1
+websockets==15.0.1
+
+# WebRTC-specific
 aiortc==1.10.1
 av==11.0.0
-httpx==0.28.1 
-websockets==15.0.1
+
+# General utilities
+requests==2.32.4
+python-dotenv==1.0.1
+Pillow==10.3.0
+
+# Deployment & Background tasks
+gunicorn==21.2.0
+celery==5.3.4
+flower==2.0.1

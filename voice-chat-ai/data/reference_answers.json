@@ -1,0 +1,141 @@
+{
+  "Q1_caregiver_experience": {
+    "question_text": "Have you ever worked as a caregiver? If so, can you please share what kind of patients/customers you worked with and what services / activities you performed?",
+    "excellent_answers": [
+      {
+        "id": "Q1_excellent_001",
+        "text": "I worked as a certified nursing assistant for 3 years at Sunrise Senior Living. I cared for residents with various conditions including dementia, diabetes, and mobility issues. My daily responsibilities included assisting with personal care, medication reminders, meal assistance, and providing emotional support. I helped with transfers using proper body mechanics and gait belts, and I was trained in infection control protocols. What I found most rewarding was building relationships with residents and seeing how small acts of kindness could brighten their day.",
+        "score_range": [90, 100],
+        "empathy_indicators": ["compassion", "relationships", "kindness", "emotional_support"],
+        "experience_indicators": ["CNA_certification", "3_years", "diverse_conditions", "technical_skills"],
+        "behavioral_patterns": ["specific_duties", "professional_training", "measurable_outcomes"]
+      },
+      {
+        "id": "Q1_excellent_002", 
+        "text": "I have 5 years of experience as a home health aide working with elderly clients. I assisted clients with Alzheimer's, Parkinson's, and post-stroke recovery. My services included personal hygiene assistance, meal preparation, light housekeeping, medication management, and companionship. I was trained in fall prevention and emergency response. I also helped families by providing regular updates on their loved one's condition and needs. The most meaningful part was helping clients maintain their independence and dignity in their own homes.",
+        "score_range": [90, 100],
+        "empathy_indicators": ["dignity", "independence", "companionship", "family_support"],
+        "experience_indicators": ["5_years", "home_health", "multiple_conditions", "emergency_training"],
+        "behavioral_patterns": ["comprehensive_care", "family_communication", "independence_focus"]
+      }
+    ],
+    "good_answers": [
+      {
+        "id": "Q1_good_001",
+        "text": "I worked as a caregiver for about 2 years. I helped elderly people with daily activities like bathing, dressing, and eating. I also did some light cleaning and cooking. I enjoyed talking with them and making sure they were comfortable. It was rewarding to help people who needed assistance.",
+        "score_range": [75, 89],
+        "empathy_indicators": ["enjoyed", "comfortable", "rewarding"],
+        "experience_indicators": ["2_years", "daily_activities", "basic_care"],
+        "behavioral_patterns": ["basic_duties", "general_satisfaction"]
+      }
+    ],
+    "fair_answers": [
+      {
+        "id": "Q1_fair_001",
+        "text": "I helped take care of my grandfather for a few months. I made sure he took his medicine and helped him get around the house. It was okay, but sometimes it was difficult when he was confused.",
+        "score_range": [60, 74],
+        "empathy_indicators": ["helped"],
+        "experience_indicators": ["few_months", "basic_assistance"],
+        "behavioral_patterns": ["personal_experience", "limited_scope"]
+      }
+    ],
+    "poor_answers": [
+      {
+        "id": "Q1_poor_001",
+        "text": "No, I haven't worked as a caregiver before, but I think I would be good at it because I'm a nice person.",
+        "score_range": [0, 59],
+        "empathy_indicators": ["nice"],
+        "experience_indicators": [],
+        "behavioral_patterns": ["no_experience", "vague_response"]
+      }
+    ]
+  },
+
+  "Q7_senior_care_experience": {
+    "question_text": "Tell me about a time when you cared for a senior. What part of the experience was most difficult and what was most meaningful to you?",
+    "excellent_answers": [
+      {
+        "id": "Q7_excellent_001",
+        "text": "I cared for my grandmother with dementia for two years after she moved in with us. The most difficult part was watching her confusion and frustration, especially during sundowning episodes. She would sometimes not recognize me or become agitated. I learned to stay calm, use simple words, and redirect her attention to activities she enjoyed like looking at old photos. The most meaningful part was realizing that even though her memory was fading, her emotions and need for connection remained. When I played her favorite music or held her hand, I could see glimpses of the grandmother I knew. It taught me that dignity and respect are crucial in caregiving, and that the person is still there even when the disease progresses.",
+        "score_range": [90, 100],
+        "empathy_indicators": ["patience", "dignity", "emotional_intelligence", "person_centered_care", "understanding"],
+        "experience_indicators": ["2_years_experience", "dementia_care", "behavioral_management", "adaptive_strategies"],
+        "behavioral_patterns": ["situation_personal", "challenges_acknowledged", "actions_compassionate", "learning_demonstrated"]
+      }
+    ],
+    "good_answers": [
+      {
+        "id": "Q7_good_001",
+        "text": "I took care of my neighbor's mother who had mobility issues after a fall. The difficult part was helping her with personal care because she was embarrassed about needing help. I tried to be respectful and let her do as much as she could on her own. The meaningful part was seeing her confidence return as she got stronger. She would tell me stories about her life, and I learned a lot from her wisdom.",
+        "score_range": [75, 89],
+        "empathy_indicators": ["respectful", "confidence", "wisdom", "dignity"],
+        "experience_indicators": ["mobility_issues", "personal_care", "recovery_support"],
+        "behavioral_patterns": ["respect_for_independence", "relationship_building", "learning_attitude"]
+      }
+    ],
+    "fair_answers": [
+      {
+        "id": "Q7_fair_001",
+        "text": "I helped my aunt when she was sick. It was hard because she was grumpy and didn't want help. But I felt good when I could make her feel better by bringing her food and keeping her company.",
+        "score_range": [60, 74],
+        "empathy_indicators": ["felt_good", "company"],
+        "experience_indicators": ["basic_assistance", "companionship"],
+        "behavioral_patterns": ["personal_experience", "basic_care"]
+      }
+    ],
+    "poor_answers": [
+      {
+        "id": "Q7_poor_001",
+        "text": "I don't have much experience with seniors, but I think I would be patient with them.",
+        "score_range": [0, 59],
+        "empathy_indicators": ["patient"],
+        "experience_indicators": [],
+        "behavioral_patterns": ["no_experience", "hypothetical_response"]
+      }
+    ]
+  },
+
+  "Q8_emotional_support": {
+    "question_text": "Tell me about a time when you helped a colleague or client who was struggling emotionally or professionally. What did you do?",
+    "excellent_answers": [
+      {
+        "id": "Q8_excellent_001",
+        "text": "A colleague was struggling after losing a patient she had cared for over several months. She was questioning whether she was cut out for this work. I sat with her during our break and just listened while she talked about her feelings. I validated that it's normal to grieve when we lose someone we've cared for - it shows we're human and that we truly care. I shared that the patient had often mentioned how much my colleague's kindness meant to her. I offered to help with her workload for a few days while she processed her grief. Later, I connected her with our employee assistance program for additional support.",
+        "score_range": [90, 100],
+        "empathy_indicators": ["listening", "validation", "emotional_support", "understanding", "compassion"],
+        "experience_indicators": ["workplace_support", "grief_understanding", "resource_connection", "professional_boundaries"],
+        "behavioral_patterns": ["active_listening", "emotional_validation", "practical_support", "professional_resources"]
+      }
+    ],
+    "good_answers": [
+      {
+        "id": "Q8_good_001",
+        "text": "A coworker was having trouble with a difficult client who was always complaining. She was getting frustrated and upset. I talked to her and suggested some ways to handle the situation, like staying calm and trying to understand why the client might be acting that way. I also offered to help her with that client when I could.",
+        "score_range": [75, 89],
+        "empathy_indicators": ["understanding", "calm", "help"],
+        "experience_indicators": ["workplace_support", "problem_solving", "teamwork"],
+        "behavioral_patterns": ["advice_giving", "practical_support", "collaborative_approach"]
+      }
+    ],
+    "fair_answers": [
+      {
+        "id": "Q8_fair_001",
+        "text": "My friend was sad about something at work. I told her it would be okay and that she shouldn't worry about it. I tried to cheer her up by taking her out for coffee.",
+        "score_range": [60, 74],
+        "empathy_indicators": ["cheer_up", "support"],
+        "experience_indicators": ["basic_support"],
+        "behavioral_patterns": ["simple_comfort", "distraction_approach"]
+      }
+    ],
+    "poor_answers": [
+      {
+        "id": "Q8_poor_001",
+        "text": "I haven't really had to deal with that situation, but I would probably just tell them to get over it and focus on their job.",
+        "score_range": [0, 59],
+        "empathy_indicators": [],
+        "experience_indicators": [],
+        "behavioral_patterns": ["no_experience", "dismissive_approach"]
+      }
+    ]
+  }
+}
