@@ -103,6 +103,11 @@ export class InterviewApiService {
         strengths: this.extractStrengths(scores),
         developmentAreas: this.extractDevelopmentAreas(scores),
         nextSteps: this.generateNextSteps(scores.recommendation),
+        // Extract availability data from user_data
+        driversLicense: userData.driversLicense || false,
+        autoInsurance: userData.autoInsurance || false,
+        availability: userData.availability || [],
+        weeklyHours: userData.weeklyHours || 0,
         createdAt: new Date(interview.startTime || Date.now()),
         updatedAt: new Date(interview.endTime || Date.now()),
       }

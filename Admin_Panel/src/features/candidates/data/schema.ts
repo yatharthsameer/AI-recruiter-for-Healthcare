@@ -23,6 +23,11 @@ export const candidateSchema = z.object({
   strengths: z.array(z.string()),
   developmentAreas: z.array(z.string()),
   nextSteps: z.array(z.string()),
+  // Availability information from user_data
+  driversLicense: z.boolean().optional(),
+  autoInsurance: z.boolean().optional(),
+  availability: z.array(z.string()).optional(), // ["Morning", "Afternoon", "Evening", "Overnight", "Weekend"]
+  weeklyHours: z.number().optional(),
   // Additional fields for table display
   createdAt: z.date().optional(),
   updatedAt: z.date().optional(),
