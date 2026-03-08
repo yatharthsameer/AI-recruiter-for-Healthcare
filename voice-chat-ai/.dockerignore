@@ -1,43 +1,92 @@
-# Ignore Python bytecode files
-__pycache__
-*.pyc
-*.pyo
+# Docker ignore file for AI Interviewer Bot
 
-# Ignore virtual environments
-venv
-env
-ENV
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
 .env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
-# Ignore the .git directory
-.git
-.gitignore
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# Ignore Docker-related files
-Dockerfile
-.dockerignore
-
-# Ignore OS-generated files
+# OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Ignore logs
+# Logs
 *.log
+logs/
 
-# Ignore coverage reports
-htmlcov
-.tox
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
+# Database files
+*.db
+*.sqlite3
 
-# Ignore Jupyter Notebook checkpoints
-.ipynb_checkpoints
+# Model files (too large for container)
+models/*.pkl
+models/*.joblib
 
-.github
+# Output files
+outputs/*
+interview-outputs/*
+!outputs/.gitkeep
+!interview-outputs/.gitkeep
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README_IMPLEMENTATION.md
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Temporary files
+tmp/
+temp/
+*.tmp

@@ -1,71 +1,54 @@
-# Use the official NVIDIA CUDA base image - This total image is huge 40 gb when completly built - use at your own risk!
-FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+# Enhanced AI Interviewer Bot Dockerfile
+# Use AWS ECR Public mirror to avoid Docker Hub auth/rate limits
+FROM public.ecr.aws/docker/library/python:3.11-slim-bullseye
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PATH="/root/.local/bin:$PATH"
-ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-ENV COQUI_TOS_AGREED=1
-
-# Create a working directory
+# Set working directory
 WORKDIR /app
 
-# Install system dependencies and Python 3.10
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    libsndfile1 \
+    gcc \
+    g++ \
     portaudio19-dev \
-    libavformat-dev \
-    libavcodec-dev \
-    libavdevice-dev \
-    libavutil-dev \
-    libswscale-dev \
-    libswresample-dev \
-    wget \
+    libsndfile1 \
+    ffmpeg \
+    espeak-ng \
+    libgl1 \
+    libglib2.0-0 \
+    python3-dev \
+    build-essential \
     curl \
-    python3.10 \
-    python3.10-venv \
-    python3-pip \
-    alsa-utils \
-    alsa-oss \
-    alsa-tools \
-    pulseaudio \
-    libsdl2-dev \
-    dbus \
+    wget \
+    git \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ffmpeg
-RUN apt-get update && apt-get install -y ffmpeg
+# Copy requirements first for better caching
+COPY requirements_enhanced.txt .
 
-# Install cuDNN
-RUN apt-get update && apt-get install -y libcudnn8 libcudnn8-dev
+# Upgrade pip and install Python dependencies
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir --timeout 300 -r requirements_enhanced.txt
 
-# Configure dbus
-RUN dbus-uuidgen > /etc/machine-id
+# Download NLTK data for TextBlob
+RUN python -c "import nltk; nltk.download('punkt'); nltk.download('brown')"
 
-# Configure ALSA to use PulseAudio
-RUN echo "pcm.!default pulse" > /root/.asoundrc && \
-    echo "ctl.!default pulse" >> /root/.asoundrc
+# Copy application code
+COPY . .
 
-# Ensure the directory exists before writing to the file
-RUN mkdir -p /usr/share/alsa/alsa.conf.d && \
-    echo "defaults.pcm.card 0" >> /usr/share/alsa/alsa.conf.d/99-pulseaudio-defaults.conf && \
-    echo "defaults.ctl.card 0" >> /usr/share/alsa/alsa.conf.d/99-pulseaudio-defaults.conf
+# Create necessary directories
+RUN mkdir -p outputs interview-outputs models logs
 
-# Copy the requirements file
-COPY requirements.txt /app/requirements.txt
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
-# Install Python dependencies
-RUN pip install --upgrade pip && pip install -r /app/requirements.txt
-
-# Copy the rest of the application code
-COPY . /app
-
-# Set the working directory
-WORKDIR /app
-
-# Expose the port that the app runs on
+# Expose port
 EXPOSE 8000
 
-# Command to run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/api/enhanced/system/health || exit 1
+
+# Default command
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

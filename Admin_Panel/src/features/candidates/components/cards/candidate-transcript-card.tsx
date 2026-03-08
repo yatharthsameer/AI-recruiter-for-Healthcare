@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import WaveSurfer from 'wavesurfer.js'
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js'
-import { Search, Download, Clock, FileText, Bot, User, TrendingUp, TrendingDown, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Search, Download, Clock, FileText, Bot, User, TrendingUp, TrendingDown, AlertTriangle, RefreshCw, Play, Pause } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -243,34 +243,106 @@ export function CandidateTranscriptCard({ candidate }: CandidateTranscriptCardPr
     })
   }, [compSegments, fullAudio?.segments])
 
-  // Listen to competency selection and jump to first matching answer
+  // Mapping of competencies to their related questions (partial text matching)
+  const competencyQuestionMapping = {
+    experience_skills: [
+      'Have you ever worked as a caregiver',
+      'imagine you\'re finding a caregiver for',
+      'how has your prior work or life experience helped you build'
+    ],
+    motivation: [
+      'Why do you want to be a caregiver',
+      'What are the most rewarding aspects'
+    ],
+    punctuality: [
+      'Tell me about a time when being late',
+      'Have you ever had to adjust your routine to ensure punctuality'
+    ],
+    compassion_empathy: [
+      'Tell me about a time when you cared for a senior',
+      'Tell me about a time when you helped a colleague or client who was struggling'
+    ],
+    communication_skills: [
+      'If we were to ask your co-workers about you'
+    ]
+  }
+
+  // Listen to competency selection and jump to first matching question
   useEffect(() => {
+    // Function to find questions matching a competency
+    const findQuestionsForCompetency = (competencyKey: string) => {
+      const questionPatterns = competencyQuestionMapping[competencyKey as keyof typeof competencyQuestionMapping]
+      if (!questionPatterns) return []
+
+      const groupedTranscript = filterAndGroupTranscript(entries)
+      const matchingGroups = groupedTranscript.filter(group => {
+        const questionText = group.question.content.toLowerCase()
+        return questionPatterns.some(pattern => 
+          questionText.includes(pattern.toLowerCase())
+        )
+      })
+
+      return matchingGroups
+    }
+
     const handler = (evt: Event) => {
       const custom = evt as CustomEvent
       const key = (custom.detail && custom.detail.key) as string | undefined
       if (!key) return
       
-      // Highlight regions for this competency
+      // Highlight regions for this competency (existing functionality)
       setActiveCompetency(key)
       highlightCompetencyRegions(key)
       
-      const list = compSegments?.[key]
-      if (!list || list.length === 0) return
-      // Choose highest-weighted segment
-      const best = [...list].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0]
-      if (!best) return
-      setActiveSegmentQ(best.questionNumber)
-      const ws = waveRef.current
-      if (ws) {
-        ws.setTime((best.startMs || 0) / 1000)
-        ws.play()
+      // Find matching questions for this competency
+      const matchingGroups = findQuestionsForCompetency(key)
+      if (matchingGroups.length > 0) {
+        // Jump to the first matching question
+        const firstMatch = matchingGroups[0]
+        const questionNumber = firstMatch.question.questionNumber
+        
+        if (questionNumber) {
+          setActiveSegmentQ(questionNumber)
+          
+          // Try to seek audio if available
+          const ws = waveRef.current
+          if (ws && compSegments?.[key]) {
+            const list = compSegments[key]
+            const best = [...list].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0]
+            if (best) {
+              ws.setTime((best.startMs || 0) / 1000)
+              ws.play()
+            }
+          }
+          
+          // Scroll to the question in the transcript
+          const questionElement = document.querySelector(`[data-question-number="${questionNumber}"]`)
+          if (questionElement) {
+            questionElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        }
       }
-      const el = document.getElementById(`q-${best.questionNumber}`)
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      
+      // Fallback to original behavior if no text matches found
+      if (matchingGroups.length === 0) {
+        const list = compSegments?.[key]
+        if (!list || list.length === 0) return
+        // Choose highest-weighted segment
+        const best = [...list].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0]
+        if (!best) return
+        setActiveSegmentQ(best.questionNumber)
+        const ws = waveRef.current
+        if (ws) {
+          ws.setTime((best.startMs || 0) / 1000)
+          ws.play()
+        }
+        const el = document.getElementById(`q-${best.questionNumber}`)
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
     }
     window.addEventListener('competencySelect', handler as EventListener)
     return () => window.removeEventListener('competencySelect', handler as EventListener)
-  }, [compSegments, highlightCompetencyRegions])
+  }, [compSegments, highlightCompetencyRegions, entries])
 
   // Function to handle clicking on transcript entries
   const handleTranscriptEntryClick = useCallback((entry: any) => {
@@ -395,6 +467,73 @@ export function CandidateTranscriptCard({ candidate }: CandidateTranscriptCardPr
     }
   }, [entries, fullAudio?.segments, isPlaying])
 
+  // Helper function to filter and group transcript entries
+  const filterAndGroupTranscript = (entries: Entry[]) => {
+    // Filter out system messages and initial exchanges before the first real question
+    const filteredEntries = entries.filter((entry, index) => {
+      // Skip system messages
+      if (entry.type === 'system') return false
+      
+      // Skip initial exchanges that aren't real interview questions
+      // Look for the first substantial question (usually contains "caregiver" or similar interview content)
+      if (entry.type === 'question') {
+        const content = entry.content.toLowerCase()
+        // Skip intro messages like "Hi, I'm CareBot" or "Ready?"
+        if (content.includes('carebot') || content.includes('ready') || content.length < 30) {
+          return false
+        }
+      }
+      
+      // Skip single word answers like "Yes", "Bye" that come before real questions
+      if (entry.type === 'answer' && entry.content.trim().split(' ').length <= 2) {
+        // Check if this answer comes before the first real question
+        const nextQuestionIndex = entries.findIndex((e, i) => 
+          i > index && e.type === 'question' && e.content.length > 30
+        )
+        const hasRealQuestionBefore = entries.slice(0, index).some(e => 
+          e.type === 'question' && e.content.length > 30
+        )
+        if (!hasRealQuestionBefore && nextQuestionIndex !== -1) {
+          return false
+        }
+      }
+      
+      return true
+    })
+
+    // Group questions with their corresponding answers
+    const grouped = []
+    let currentQuestion = null
+    let currentAnswers = []
+
+    filteredEntries.forEach(entry => {
+      if (entry.type === 'question') {
+        // Save previous group if exists
+        if (currentQuestion) {
+          grouped.push({
+            question: currentQuestion,
+            answers: [...currentAnswers]
+          })
+        }
+        // Start new group
+        currentQuestion = entry
+        currentAnswers = []
+      } else if (entry.type === 'answer' && currentQuestion) {
+        currentAnswers.push(entry)
+      }
+    })
+
+    // Add the last group
+    if (currentQuestion) {
+      grouped.push({
+        question: currentQuestion,
+        answers: [...currentAnswers]
+      })
+    }
+
+    return grouped
+  }
+
   // Fetch real transcript data
   useEffect(() => {
     const fetchTranscript = async () => {
@@ -465,8 +604,11 @@ export function CandidateTranscriptCard({ candidate }: CandidateTranscriptCardPr
     fetchTranscript()
   }, [candidate.id, candidate])
 
-  const filteredTranscript = entries.filter((entry: Entry) =>
-    entry.content.toLowerCase().includes(searchTerm.toLowerCase())
+  // Group and filter transcript
+  const groupedTranscript = filterAndGroupTranscript(entries)
+  const filteredGroupedTranscript = groupedTranscript.filter(group => 
+    group.question.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    group.answers.some(answer => answer.content.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
   const formatDuration = (seconds: number) => {
@@ -568,8 +710,8 @@ export function CandidateTranscriptCard({ candidate }: CandidateTranscriptCardPr
   }
 
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="flex-shrink-0">
+    <Card className="h-[700px] flex flex-col overflow-hidden">
+      <CardHeader className="flex-shrink-0 pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center space-x-2">
             <FileText className="h-5 w-5" />
@@ -587,171 +729,138 @@ export function CandidateTranscriptCard({ candidate }: CandidateTranscriptCardPr
             <Clock className="h-4 w-4" />
             <span>Duration: {formatDuration(candidate.duration)}</span>
           </div>
-          <div>Questions: {entries.filter(e => e.type === 'question').length}</div>
+          <div>Questions: {groupedTranscript.length}</div>
           <div>Session: {candidate.id.slice(0, 8)}...</div>
         </div>
 
         {/* Full Interview Audio */}
         {fullAudio?.url && (
-          <div className="mt-3">
+          <div className="mt-2">
             {/* Hidden controller audio to enable precise seeks while using visualizer for UI */}
             <audio ref={playerRef} data-full src={fullAudio.url} style={{ display: 'none' }} />
-            {/* WaveSurfer visualizer */}
-            <div id="full-audio-player" className="w-full" ref={visualizerRef} />
-            <div className="mt-2 flex items-center gap-2">
-              <Button size="sm" onClick={() => waveRef.current?.playPause()}>
-                {isPlaying ? 'Pause' : 'Play'}
+            {/* WaveSurfer visualizer with play button */}
+            <div className="flex items-center gap-2">
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => waveRef.current?.playPause()}
+                className="flex-shrink-0"
+              >
+                {isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
               </Button>
-              <div className="text-xs text-muted-foreground">Full interview audio</div>
+              <div id="full-audio-player" className="flex-1 min-h-[60px]" ref={visualizerRef} />
             </div>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {fullAudio.segments?.map((seg) => (
-                <button
-                  key={seg.questionNumber}
-                  className={`text-xs px-2 py-1 rounded border ${activeSegmentQ === seg.questionNumber ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-900'}`}
-                  onClick={() => {
-                    setActiveSegmentQ(seg.questionNumber)
-                    const ws = waveRef.current
-                    if (ws) {
-                      ws.setTime((seg.startMs || 0) / 1000)
-                      ws.play()
-                    }
-                  }}
-                >
-                  Q{seg.questionNumber}
-                </button>
-              ))}
-            </div>
-            
-            {/* Color Legend */}
-            {/* <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Waveform Color Legend:</div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(107,114,128,0.4)' }}></div>
-                  <span>All Speech</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(37, 99, 235, 0.4)' }}></div>
-                  <span>Empathy & Compassion</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(16, 185, 129, 0.4)' }}></div>
-                  <span>Experience & Commitment</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(234, 179, 8, 0.4)' }}></div>
-                  <span>Problem Solving</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(244, 63, 94, 0.4)' }}></div>
-                  <span>Safety Awareness</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(139, 92, 246, 0.4)' }}></div>
-                  <span>Communication Skills</span>
-                </div>
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                💡 Click on competency scores to highlight specific segments in the waveform
-              </div>
-            </div> */}
           </div>
         )}
         
         {/* Search */}
-        <div className="relative">
+        <div className="relative mt-2">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search in transcript..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="pl-10 h-8"
+            size="sm"
           />
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-hidden p-0">
-        <ScrollArea className="h-full px-6 pb-6">
-          <div className="space-y-6">
-            {filteredTranscript.map((entry, index) => (
-              <div key={index}>
-                {entry.type === 'question' ? (
-                  <div className="flex space-x-4">
+      <CardContent className="flex-1 overflow-hidden p-0 min-h-0">
+        <ScrollArea className="h-full px-6 pb-6 pt-2">
+          <div className="space-y-3">
+            {filteredGroupedTranscript.map((group, index) => (
+              <div key={index} className="border rounded-lg overflow-hidden" data-question-number={group.question.questionNumber}>
+                {/* Question Section */}
+                <div 
+                  className="bg-blue-50 dark:bg-blue-950/30 border-b border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors"
+                  onClick={() => handleTranscriptEntryClick(group.question)}
+                  title="Click to jump to this part of the audio"
+                >
+                  <div className="flex space-x-3 p-3">
                     <div className="flex-shrink-0">
                       <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
                         <Bot className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                       </div>
                     </div>
-                    <div className="flex-1 space-y-2">
+                    <div className="flex-1 space-y-1">
                       <div className="flex items-center space-x-2">
-                        <Badge variant="outline" className="text-xs cursor-pointer" onClick={() => seekFullAudioToQuestion(entry.questionNumber || 0)}>
-                          Q{entry.questionNumber}
+                        <Badge variant="outline" className="text-xs cursor-pointer" onClick={(e) => {
+                          e.stopPropagation()
+                          seekFullAudioToQuestion(group.question.questionNumber || 0)
+                        }}>
+                          Q{group.question.questionNumber}
                         </Badge>
                         <div className="flex items-center space-x-1 text-xs text-muted-foreground">
                           <Clock className="h-3 w-3" />
-                          <span>{entry.timestamp}</span>
+                          <span>{group.question.timestamp}</span>
                         </div>
                       </div>
-                      <div 
-                        className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors"
-                        onClick={() => handleTranscriptEntryClick(entry)}
-                        title="Click to jump to this part of the audio"
-                      >
-                        <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                          {highlightText(entry.content, searchTerm)}
-                        </p>
-                      </div>
+                      <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                        {highlightText(group.question.content, searchTerm)}
+                      </p>
                     </div>
                   </div>
-                ) : (
-                  <div className="flex space-x-4">
-                    <div className="flex-shrink-0">
-                      <div className="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
-                        <User className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      </div>
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <Badge variant="outline" className="text-xs cursor-pointer" onClick={() => seekFullAudioToQuestion(entry.questionNumber || 0)}>
-                          A{entry.questionNumber}
-                        </Badge>
-                        <div className="flex items-center space-x-1 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          <span>{entry.timestamp}</span>
-                        </div>
-                        {entry.duration && (
-                          <Badge variant="secondary" className="text-xs">
-                            {entry.duration}s response
-                          </Badge>
-                        )}
-                      </div>
-                      
-                      <div 
-                        className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                        onClick={() => handleTranscriptEntryClick(entry)}
-                        title="Click to jump to this part of the audio"
-                      >
-                        <p className="text-sm">
-                          {highlightText(entry.content, searchTerm)}
-                        </p>
-                        {entry.audioUrl && (
-                          <div className="mt-3">
-                            <audio controls src={entry.audioUrl} className="w-full" />
-                          </div>
-                        )}
-                      </div>
+                </div>
 
-                      {/* Analysis section removed for cleaner transcript */}
+                {/* Answers Section */}
+                <div className="bg-white dark:bg-gray-950">
+                  {group.answers.map((answer, answerIndex) => (
+                    <div 
+                      key={answerIndex}
+                      className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors"
+                      onClick={() => handleTranscriptEntryClick(answer)}
+                      title="Click to jump to this part of the audio"
+                    >
+                      <div className="flex space-x-3 p-3">
+                        <div className="flex-shrink-0">
+                          <div className="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                            <User className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          </div>
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="outline" className="text-xs cursor-pointer" onClick={(e) => {
+                              e.stopPropagation()
+                              seekFullAudioToQuestion(answer.questionNumber || 0)
+                            }}>
+                              A{answer.questionNumber}
+                            </Badge>
+                            <div className="flex items-center space-x-1 text-xs text-muted-foreground">
+                              <Clock className="h-3 w-3" />
+                              <span>{answer.timestamp}</span>
+                            </div>
+                            {answer.duration && (
+                              <Badge variant="secondary" className="text-xs">
+                                {answer.duration}s response
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-900 dark:text-gray-100">
+                            {highlightText(answer.content, searchTerm)}
+                          </p>
+                          {answer.audioUrl && (
+                            <div className="mt-3">
+                              <audio controls src={answer.audioUrl} className="w-full" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  ))}
+                </div>
               </div>
             ))}
             
-            {filteredTranscript.length === 0 && searchTerm && (
+            {filteredGroupedTranscript.length === 0 && searchTerm && (
               <div className="text-center py-8 text-muted-foreground">
                 No results found for "{searchTerm}"
+              </div>
+            )}
+
+            {filteredGroupedTranscript.length === 0 && !searchTerm && entries.length > 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                No interview questions found. The transcript may contain only system messages.
               </div>
             )}
           </div>

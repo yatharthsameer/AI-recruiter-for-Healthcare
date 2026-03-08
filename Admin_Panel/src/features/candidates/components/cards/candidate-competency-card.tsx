@@ -79,14 +79,14 @@ export function CandidateCompetencyCard({ candidate, onSelect }: CandidateCompet
   }
 
   return (
-    <Card className='h-full'>
-      <CardHeader>
+    <Card className='h-[700px] flex flex-col overflow-hidden'>
+      <CardHeader className="flex-shrink-0">
         <CardTitle className="flex items-center space-x-2">
           <Target className="h-5 w-5" />
           <span>Competency Scores</span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="flex-1 space-y-6 overflow-auto">
         {/* Circular Progress Grid */}
         <div className="grid grid-cols-2 gap-6">
           {Object.entries(candidate.competencyScores).map(([key, score]) => {
